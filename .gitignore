@@ -1,0 +1,12 @@
+bin/
+.vendor/
+*.exe
+*.apk
+*.aar
+android/.gradle/
+android/build/
+android/app/build/
+windows/frontend/dist/
+windows/build/
+usage-stats.json
+profiles.json
