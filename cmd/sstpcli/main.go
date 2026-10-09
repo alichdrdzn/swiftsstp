@@ -1,4 +1,4 @@
-// Command sstpcli is the Slipstream reference client: it dials an SSTP
+// Command sstpcli is the Sstpflash reference client: it dials an SSTP
 // server, brings the inner IP packets onto a local TUN device, and prints
 // usage counters. It exists to prove interop end-to-end and to give the
 // desktop/android shells a known-good engine call sequence.
@@ -20,7 +20,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"slipstream/tunnel"
+	"sstpflash/tunnel"
 )
 
 func main() {

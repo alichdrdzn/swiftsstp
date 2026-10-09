@@ -1,4 +1,4 @@
-package com.slipstream.client.ui
+package com.sstpflash.client.ui
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
@@ -25,7 +25,7 @@ val Mint = Color(0xFF7FDCC0)
 val Amber = Color(0xFFFFC46B)
 val Rose = Color(0xFFFF8080)
 
-private val SlipstreamColors = darkColorScheme(
+private val SstpflashColors = darkColorScheme(
     primary = AccentBlue,
     onPrimary = Color(0xFF06101F),
     primaryContainer = Color(0xFF1C2B45),
@@ -55,7 +55,7 @@ private val SlipstreamColors = darkColorScheme(
     onErrorContainer = Color(0xFFFFD9DA),
 )
 
-private val SlipstreamTypography = Typography(
+private val SstpflashTypography = Typography(
     displaySmall = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.SemiBold,
@@ -123,10 +123,10 @@ private val SlipstreamTypography = Typography(
 )
 
 @Composable
-fun SlipstreamTheme(content: @Composable () -> Unit) {
+fun SstpflashTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = SlipstreamColors,
-        typography = SlipstreamTypography,
+        colorScheme = SstpflashColors,
+        typography = SstpflashTypography,
         content = content,
     )
 }

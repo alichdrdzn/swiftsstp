@@ -8,7 +8,7 @@ package dataplane
 import (
 	"net"
 
-	"slipstream/tunnel"
+	"sstpflash/tunnel"
 )
 
 // Listener defaults for proxy mode (v2rayN-style local inbounds).

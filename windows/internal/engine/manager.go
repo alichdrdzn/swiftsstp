@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"slipstream/tunnel"
-	"slipstream/usage"
-	"slipstream/windows/internal/dataplane"
+	"sstpflash/tunnel"
+	"sstpflash/usage"
+	"sstpflash/windows/internal/dataplane"
 )
 
 // Status is the full connection snapshot pushed to the UI (as a Wails
@@ -47,7 +47,7 @@ type Options struct {
 	// Tunnel is the whole-device data plane (Wintun); nil where the
 	// platform does not provide one (e.g. the Linux proxy test build).
 	Tunnel dataplane.DataPlane
-	// Usage accumulates lifetime per-server totals (slipstream/usage,
+	// Usage accumulates lifetime per-server totals (sstpflash/usage,
 	// write-through to usage-stats.json).
 	Usage *usage.Store
 	// OnStatus is called (from manager goroutines) on every transition and

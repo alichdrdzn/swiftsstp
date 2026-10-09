@@ -1,4 +1,4 @@
-package com.slipstream.client.ui
+package com.sstpflash.client.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,8 +44,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.slipstream.client.data.UsageEntry
-import com.slipstream.client.model.Profile
+import com.sstpflash.client.data.UsageEntry
+import com.sstpflash.client.model.Profile
 
 /**
  * Profile list: one card per server, lifetime usage inline, an overflow menu
@@ -68,7 +68,7 @@ fun ProfilesScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Slipstream", style = MaterialTheme.typography.titleLarge)
+                        Text("Sstpflash", style = MaterialTheme.typography.titleLarge)
                         Text(
                             text = if (profiles.isEmpty()) "No servers yet"
                             else "${profiles.size} server${if (profiles.size == 1) "" else "s"} configured",

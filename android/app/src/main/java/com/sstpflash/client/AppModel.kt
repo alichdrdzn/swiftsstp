@@ -1,10 +1,10 @@
-package com.slipstream.client
+package com.sstpflash.client
 
 import android.content.Context
-import com.slipstream.client.data.ProfileStore
-import com.slipstream.client.data.UsageEntry
-import com.slipstream.client.data.UsageStore
-import com.slipstream.client.model.Profile
+import com.sstpflash.client.data.ProfileStore
+import com.sstpflash.client.data.UsageEntry
+import com.sstpflash.client.data.UsageStore
+import com.sstpflash.client.model.Profile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

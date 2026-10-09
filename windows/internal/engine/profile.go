@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"time"
 
-	"slipstream/tunnel"
+	"sstpflash/tunnel"
 )
 
 // Mode selects the data plane.

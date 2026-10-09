@@ -1,4 +1,4 @@
-module slipstream
+module sstpflash
 
 go 1.27.0
 

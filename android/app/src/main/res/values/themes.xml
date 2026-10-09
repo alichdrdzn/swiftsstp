@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Dark, near-black chrome so the Compose surface never flashes white. -->
-    <style name="Theme.Slipstream" parent="android:Theme.Material.NoActionBar">
+    <style name="Theme.Sstpflash" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/ink_background</item>
         <item name="android:statusBarColor">@color/ink_background</item>
         <item name="android:navigationBarColor">@color/ink_background</item>

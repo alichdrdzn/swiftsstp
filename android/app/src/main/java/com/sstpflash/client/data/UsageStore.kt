@@ -1,4 +1,4 @@
-package com.slipstream.client.data
+package com.sstpflash.client.data
 
 import org.json.JSONObject
 import java.io.File

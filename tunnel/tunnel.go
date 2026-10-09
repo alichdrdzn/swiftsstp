@@ -1,4 +1,4 @@
-// Package tunnel is the Slipstream SSTP client engine: TLS + MS-SSTP + PPP
+// Package tunnel is the Sstpflash SSTP client engine: TLS + MS-SSTP + PPP
 // (MS-CHAPv2) with a packet-level data path. Unlike a host-VPN client it owns
 // no interface: Dial returns raw inner IP packets through ReadIP/WriteIP, so
 // the same engine feeds a VpnService TUN (Android), a Wintun adapter
@@ -23,11 +23,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"slipstream/internal/mschap"
-	ppp "slipstream/internal/ppp"
-	"slipstream/internal/sstp"
-	"slipstream/internal/sstp/wire"
-	"slipstream/internal/vlog"
+	"sstpflash/internal/mschap"
+	ppp "sstpflash/internal/ppp"
+	"sstpflash/internal/sstp"
+	"sstpflash/internal/sstp/wire"
+	"sstpflash/internal/vlog"
 )
 
 // TLSMode selects how the server certificate is treated. SSTP's inner auth

@@ -1,4 +1,4 @@
-package com.slipstream.client.model
+package com.sstpflash.client.model
 
 import org.json.JSONArray
 import org.json.JSONObject

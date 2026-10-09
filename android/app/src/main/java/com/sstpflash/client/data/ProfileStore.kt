@@ -1,6 +1,6 @@
-package com.slipstream.client.data
+package com.sstpflash.client.data
 
-import com.slipstream.client.model.Profile
+import com.sstpflash.client.model.Profile
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File

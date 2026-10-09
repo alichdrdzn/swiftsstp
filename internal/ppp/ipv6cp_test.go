@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"slipstream/internal/mschap"
+	"sstpflash/internal/mschap"
 )
 
 // ipv6Handler records the session's events and signals NetworkUp/Closed on

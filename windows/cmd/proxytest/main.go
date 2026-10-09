@@ -16,9 +16,9 @@ import (
 	"syscall"
 	"time"
 
-	"slipstream/usage"
-	"slipstream/windows/internal/engine"
-	"slipstream/windows/internal/proxy"
+	"sstpflash/usage"
+	"sstpflash/windows/internal/engine"
+	"sstpflash/windows/internal/proxy"
 )
 
 func main() {
@@ -35,7 +35,7 @@ func main() {
 	flag.Parse()
 	log.SetFlags(log.Ltime | log.Lmicroseconds)
 
-	// Exercises slipstream/usage write-through persistence in cwd.
+	// Exercises sstpflash/usage write-through persistence in cwd.
 	u, _ := usage.Open("usage-stats.json")
 
 	pxy := proxy.New(proxy.Config{

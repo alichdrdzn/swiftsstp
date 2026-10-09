@@ -9,11 +9,11 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"slipstream/windows/internal/engine"
-	"slipstream/windows/internal/proxy"
-	"slipstream/windows/internal/store"
-	"slipstream/usage"
-	"slipstream/windows/internal/sysproxy"
+	"sstpflash/windows/internal/engine"
+	"sstpflash/windows/internal/proxy"
+	"sstpflash/windows/internal/store"
+	"sstpflash/usage"
+	"sstpflash/windows/internal/sysproxy"
 )
 
 const maxLogLines = 500
@@ -36,7 +36,7 @@ func NewApp() *App {
 	a := &App{}
 	u, err := store.OpenUsage()
 	if err != nil {
-		fmt.Printf("slipstream: usage store unavailable: %v\n", err)
+		fmt.Printf("sstpflash: usage store unavailable: %v\n", err)
 	} else {
 		a.usage = u
 	}
@@ -54,7 +54,7 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	a.logf("slipstream: ui ready")
+	a.logf("sstpflash: ui ready")
 }
 
 func (a *App) shutdown(context.Context) {

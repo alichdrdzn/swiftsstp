@@ -19,7 +19,7 @@ import (
 	"sync"
 	"time"
 
-	"slipstream/tunnel"
+	"sstpflash/tunnel"
 )
 
 // DialFunc dials a tunnel; tunnel.Dial satisfies it unchanged. The dialer is

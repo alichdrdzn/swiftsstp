@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"slipstream/internal/mschap"
+	"sstpflash/internal/mschap"
 )
 
 // transportFunc adapts a function to the Transport interface.

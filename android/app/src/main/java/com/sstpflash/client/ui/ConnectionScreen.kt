@@ -1,4 +1,4 @@
-package com.slipstream.client.ui
+package com.sstpflash.client.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -42,10 +42,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.slipstream.client.AppModel
-import com.slipstream.client.VpnController
-import com.slipstream.client.data.UsageEntry
-import com.slipstream.client.model.Profile
+import com.sstpflash.client.AppModel
+import com.sstpflash.client.VpnController
+import com.sstpflash.client.data.UsageEntry
+import com.sstpflash.client.model.Profile
 
 /**
  * The live screen: pick a profile, connect, watch session and lifetime

@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Slipstream"
+rootProject.name = "Sstpflash"
 include(":app")

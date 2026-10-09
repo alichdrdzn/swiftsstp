@@ -1,4 +1,4 @@
-package com.slipstream.client
+package com.sstpflash.client
 
 import android.Manifest
 import android.app.Activity
@@ -24,11 +24,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
-import com.slipstream.client.model.Profile
-import com.slipstream.client.ui.ConnectionScreen
-import com.slipstream.client.ui.ProfilesScreen
-import com.slipstream.client.ui.ProfileEditorScreen
-import com.slipstream.client.ui.SlipstreamTheme
+import com.sstpflash.client.model.Profile
+import com.sstpflash.client.ui.ConnectionScreen
+import com.sstpflash.client.ui.ProfilesScreen
+import com.sstpflash.client.ui.ProfileEditorScreen
+import com.sstpflash.client.ui.SstpflashTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,7 +36,7 @@ class MainActivity : ComponentActivity() {
         AppModel.init(this)
         enableEdgeToEdge()
         setContent {
-            SlipstreamTheme {
+            SstpflashTheme {
                 App()
             }
         }

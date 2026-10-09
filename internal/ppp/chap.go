@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"slipstream/internal/cryptoutil"
-	"slipstream/internal/mschap"
+	"sstpflash/internal/cryptoutil"
+	"sstpflash/internal/mschap"
 )
 
 // CHAP codes (RFC 1994), reused by MS-CHAPv2.

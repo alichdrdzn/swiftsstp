@@ -1,4 +1,4 @@
-package com.slipstream.client.ui
+package com.sstpflash.client.ui
 
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -49,9 +49,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import com.slipstream.client.model.AppRules
-import com.slipstream.client.model.AutoReconnect
-import com.slipstream.client.model.Profile
+import com.sstpflash.client.model.AppRules
+import com.sstpflash.client.model.AutoReconnect
+import com.sstpflash.client.model.Profile
 import java.io.File
 import java.io.FileOutputStream
 

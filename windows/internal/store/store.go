@@ -1,6 +1,6 @@
 // Package store persists profiles.json (+ opens usage-stats.json) in the
-// location from docs/PROFILE_SCHEMA.md: %APPDATA%\Slipstream on Windows,
-// $SLIPSTREAM_HOME or ~/.config/Slipstream elsewhere (dev/test).
+// location from docs/PROFILE_SCHEMA.md: %APPDATA%\SSTPflash on Windows,
+// $SSTPFLASH_HOME or ~/.config/SSTPflash elsewhere (dev/test).
 package store
 
 import (
@@ -13,8 +13,8 @@ import (
 	"runtime"
 	"sync"
 
-	"slipstream/usage"
-	"slipstream/windows/internal/engine"
+	"sstpflash/usage"
+	"sstpflash/windows/internal/engine"
 )
 
 var mu sync.Mutex
@@ -31,15 +31,15 @@ func Dir() (string, error) {
 			}
 			base = filepath.Join(home, "AppData", "Roaming")
 		}
-		dir = filepath.Join(base, "Slipstream")
-	} else if h := os.Getenv("SLIPSTREAM_HOME"); h != "" {
+		dir = filepath.Join(base, "SSTPflash")
+	} else if h := os.Getenv("SSTPFLASH_HOME"); h != "" {
 		dir = h
 	} else {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return "", err
 		}
-		dir = filepath.Join(home, ".config", "Slipstream")
+		dir = filepath.Join(home, ".config", "SSTPflash")
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", fmt.Errorf("config dir: %w", err)
@@ -137,7 +137,7 @@ func Delete(id string) error {
 	return Save(out)
 }
 
-// OpenUsage opens the lifetime usage store (slipstream/usage) next to
+// OpenUsage opens the lifetime usage store (sstpflash/usage) next to
 // profiles.json: usage-stats.json in the config directory.
 func OpenUsage() (*usage.Store, error) {
 	dir, err := Dir()

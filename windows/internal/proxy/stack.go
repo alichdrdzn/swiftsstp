@@ -17,7 +17,7 @@ import (
 	"gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
 	"gvisor.dev/gvisor/pkg/tcpip/transport/udp"
 
-	"slipstream/tunnel"
+	"sstpflash/tunnel"
 )
 
 const nicID = tcpip.NICID(1)

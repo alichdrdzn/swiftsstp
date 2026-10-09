@@ -1,11 +1,11 @@
-package com.slipstream.client
+package com.sstpflash.client
 
 import android.content.Context
 import android.content.Intent
 import android.net.VpnService
 import androidx.core.content.ContextCompat
-import com.slipstream.client.model.Profile
-import com.slipstream.client.vpn.SlipstreamVpnService
+import com.sstpflash.client.model.Profile
+import com.sstpflash.client.vpn.SstpflashVpnService
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
@@ -67,17 +67,17 @@ object VpnController {
     fun prepare(context: Context): Intent? = VpnService.prepare(context)
 
     fun start(context: Context, profile: Profile) {
-        val intent = Intent(context, SlipstreamVpnService::class.java)
-            .setAction(SlipstreamVpnService.ACTION_CONNECT)
-            .putExtra(SlipstreamVpnService.EXTRA_PROFILE_JSON, profile.toJson().toString())
+        val intent = Intent(context, SstpflashVpnService::class.java)
+            .setAction(SstpflashVpnService.ACTION_CONNECT)
+            .putExtra(SstpflashVpnService.EXTRA_PROFILE_JSON, profile.toJson().toString())
         ContextCompat.startForegroundService(context, intent)
     }
 
     fun startAfterConsent(context: Context, profile: Profile) = start(context, profile)
 
     fun stop() {
-        if (SlipstreamVpnService.isRunning()) {
-            SlipstreamVpnService.requestStop()
+        if (SstpflashVpnService.isRunning()) {
+            SstpflashVpnService.requestStop()
         } else {
             // No service to talk to: settle the UI rather than leaving a
             // stale "connected" chip on screen.

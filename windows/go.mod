@@ -1,4 +1,4 @@
-module slipstream/windows
+module sstpflash/windows
 
 go 1.27.2
 
@@ -7,7 +7,7 @@ require (
 	golang.org/x/sys v0.49.0
 	golang.zx2c4.com/wireguard v0.0.0-20261006164505-2631ce99a06f
 	gvisor.dev/gvisor v0.0.0-20260906120324-45bde0d1defa
-	slipstream v0.0.0
+	sstpflash v0.0.0
 )
 
 require (
@@ -44,4 +44,4 @@ require (
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
 )
 
-replace slipstream => ../
+replace sstpflash => ../

@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"slipstream/internal/ppp"
-	"slipstream/tunnel"
+	"sstpflash/internal/ppp"
+	"sstpflash/tunnel"
 )
 
 // eventLog records the manager's callbacks in order, for asserting the

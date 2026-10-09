@@ -1,4 +1,4 @@
-# Slipstream
+# SSTPflash
 
 An open-source SSTP (Secure Socket Tunneling Protocol) VPN client for Android
 and Windows, built around one portable Go engine.

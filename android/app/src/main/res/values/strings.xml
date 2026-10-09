@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Slipstream</string>
+    <string name="app_name">SSTPflash</string>
     <string name="notification_channel_vpn">VPN session</string>
-    <string name="notification_channel_vpn_desc">Live status and traffic for the active Slipstream tunnel.</string>
+    <string name="notification_channel_vpn_desc">Live status and traffic for the active SSTPflash tunnel.</string>
 </resources>

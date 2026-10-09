@@ -1,4 +1,4 @@
-package com.slipstream.client.vpn
+package com.sstpflash.client.vpn
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -10,16 +10,16 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
-import com.slipstream.client.AppModel
-import com.slipstream.client.R
-import com.slipstream.client.VpnController
-import com.slipstream.client.data.UsageStore
-import com.slipstream.client.model.AppRules
-import com.slipstream.client.model.Profile
+import com.sstpflash.client.AppModel
+import com.sstpflash.client.R
+import com.sstpflash.client.VpnController
+import com.sstpflash.client.data.UsageStore
+import com.sstpflash.client.model.AppRules
+import com.sstpflash.client.model.Profile
 import org.json.JSONObject
-import slipstream.mobile.Client
-import slipstream.mobile.Mobile
-import slipstream.mobile.Protector
+import sstpflash.mobile.Client
+import sstpflash.mobile.Mobile
+import sstpflash.mobile.Protector
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -38,15 +38,15 @@ import java.util.concurrent.CountDownLatch
  *     stop permanently on an authentication error;
  *  5. flush lifetime usage to `usage-stats.json` periodically and at teardown.
  */
-class SlipstreamVpnService : VpnService() {
+class SstpflashVpnService : VpnService() {
 
     companion object {
-        const val ACTION_CONNECT = "com.slipstream.client.action.CONNECT"
-        const val ACTION_DISCONNECT = "com.slipstream.client.action.DISCONNECT"
+        const val ACTION_CONNECT = "com.sstpflash.client.action.CONNECT"
+        const val ACTION_DISCONNECT = "com.sstpflash.client.action.DISCONNECT"
         const val EXTRA_PROFILE_JSON = "profile_json"
 
         private const val NOTIF_ID = 7
-        private const val CHANNEL_ID = "slipstream_vpn"
+        private const val CHANNEL_ID = "sstpflash_vpn"
         private const val CONNECT_TIMEOUT_MS = 20_000L
         private const val KEEPALIVE_SEC = 30
         private const val USAGE_FLUSH_MS = 10_000L
@@ -55,7 +55,7 @@ class SlipstreamVpnService : VpnService() {
         private val TIME_FMT = DateTimeFormatter.ofPattern("HH:mm:ss")
 
         @Volatile
-        private var instance: SlipstreamVpnService? = null
+        private var instance: SstpflashVpnService? = null
 
         fun isRunning(): Boolean = instance != null
 
@@ -165,7 +165,7 @@ class SlipstreamVpnService : VpnService() {
         }
         appendLog("connecting to ${p.host}:${p.port} (${p.tlsModeLabel()})")
 
-        worker = Thread({ runLoop(p) }, "slipstream-loop").apply {
+        worker = Thread({ runLoop(p) }, "sstpflash-loop").apply {
             isDaemon = true
             start()
         }
@@ -388,7 +388,7 @@ class SlipstreamVpnService : VpnService() {
     private fun establishTun(p: Profile, stats: Stats): ParcelFileDescriptor? {
         return try {
             val builder = Builder()
-            builder.setSession(p.name.ifBlank { "Slipstream" })
+            builder.setSession(p.name.ifBlank { "Sstpflash" })
             builder.setMtu(if (stats.mtu in 576..1500) stats.mtu else 1400)
             builder.setBlocking(true)
 

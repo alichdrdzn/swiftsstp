@@ -1,4 +1,4 @@
-# Slipstream profile schema (v1)
+# SSTPflash profile schema (v1)
 
 Both the Android and Windows apps store profiles as JSON with this exact
 shape. Field names are canonical; apps may add app-specific extras under
@@ -41,7 +41,7 @@ shape. Field names are canonical; apps may add app-specific extras under
   empty = whole device
 - File location:
   - Android: app-internal files dir (`filesDir/profiles.json`)
-  - Windows: `%APPDATA%\Slipstream\profiles.json` (dev: `./profiles.json`)
+  - Windows: `%APPDATA%\SSTPflash\profiles.json` (dev: `./profiles.json`)
 
 # Usage stats (separate file, same directory, `usage-stats.json`)
 

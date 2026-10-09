@@ -7,7 +7,7 @@ import (
 	"net"
 	"sync"
 
-	"slipstream/internal/mschap"
+	"sstpflash/internal/mschap"
 )
 
 // Authenticator returns the password for a username, or ok=false if unknown. The

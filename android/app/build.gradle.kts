@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.slipstream.client"
+    namespace = "com.sstpflash.client"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.slipstream.client"
+        applicationId = "com.sstpflash.client"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
@@ -44,7 +44,7 @@ android {
 }
 
 dependencies {
-    // gomobile binding: the Slipstream SSTP engine (slipstream.mobile.*).
+    // gomobile binding: the Sstpflash SSTP engine (sstpflash.mobile.*).
     implementation(files("libs/mobile.aar"))
 
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))

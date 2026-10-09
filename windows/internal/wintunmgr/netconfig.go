@@ -15,7 +15,7 @@ import (
 
 // ifName is the Wintun adapter alias. Fixed so the adapter (and its config)
 // is reused across sessions.
-const ifName = "Slipstream"
+const ifName = "Sstpflash"
 
 // undoOp rolls back one configuration step.
 type undoOp struct {
@@ -256,7 +256,7 @@ func openInterfacesKey(root registry.Key, base, friendly string) (registry.Key, 
 	return registry.OpenKey(root, base+`\`+guid, registry.SET_VALUE|registry.QUERY_VALUE)
 }
 
-// adapterGUID maps an interface friendly name ("Slipstream") to its
+// adapterGUID maps an interface friendly name ("Sstpflash") to its
 // "{GUID}" registry key name via GetAdaptersAddresses.
 func adapterGUID(friendly string) (string, error) {
 	size := uint32(2048)

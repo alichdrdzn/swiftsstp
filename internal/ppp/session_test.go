@@ -5,7 +5,7 @@ import (
 	"net"
 	"testing"
 
-	"slipstream/internal/mschap"
+	"sstpflash/internal/mschap"
 )
 
 // captureTransport records the frames the session sends.

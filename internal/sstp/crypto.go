@@ -7,8 +7,8 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"slipstream/internal/mschap"
-	"slipstream/internal/sstp/wire"
+	"sstpflash/internal/mschap"
+	"sstpflash/internal/sstp/wire"
 )
 
 var sstpLabel = []byte("SSTP inner method derived CMK")

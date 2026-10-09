@@ -9,8 +9,8 @@ import (
 	"net"
 	"sync"
 
-	"slipstream/tunnel"
-	"slipstream/windows/internal/dataplane"
+	"sstpflash/tunnel"
+	"sstpflash/windows/internal/dataplane"
 )
 
 // Config configures the local listeners.

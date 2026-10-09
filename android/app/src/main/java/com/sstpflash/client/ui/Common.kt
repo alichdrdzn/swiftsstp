@@ -1,4 +1,4 @@
-package com.slipstream.client.ui
+package com.sstpflash.client.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -25,8 +25,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.slipstream.client.VpnController
-import com.slipstream.client.model.Profile
+import com.sstpflash.client.VpnController
+import com.sstpflash.client.model.Profile
 
 /** Human byte counts: "812 B", "1.2 MB", "3.04 GB". */
 fun formatBytes(v: Long): String = when {
