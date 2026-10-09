@@ -86,10 +86,18 @@ const defaultMRU = DefaultMRU
 // IPConfig is the network configuration IPCP assigns the client. PeerIP is the
 // server's own inner address (from its IPCP Configure-Request); the tunnel uses
 // it as the point-to-point gateway.
+//
+// LocalIP6/PeerIP6 carry the IPv6CP interface identifiers (RFC 5072), not full
+// addresses: IPv6CP negotiates the 64-bit IIDs the link endpoints use, and each
+// side forms its own address from them (typically fe80:: plus the IID). Both
+// are nil when IPv6CP was not negotiated or was never requested — most SSTP
+// servers, SoftEther among them, do not implement IPv6CP at all.
 type IPConfig struct {
-	LocalIP net.IP
-	PeerIP  net.IP
-	DNS     []net.IP
+	LocalIP  net.IP
+	PeerIP   net.IP
+	DNS      []net.IP
+	LocalIP6 net.IP
+	PeerIP6  net.IP
 }
 
 // Handler receives the PPP session's lifecycle events. The SSTP layer implements
@@ -113,6 +121,7 @@ const (
 	phaseLCP phase = iota
 	phaseAuth
 	phaseIPCP
+	phaseIPv6CP
 	phaseUp
 	phaseClosed
 )
@@ -152,6 +161,18 @@ type Session struct {
 	ipcpLocalOpen, ipcpRemoteOpen bool
 	reqIP, reqDNS1, reqDNS2       net.IP
 	peerIP                        net.IP
+
+	// IPv6CP (RFC 5072) state, mirroring the IPCP block above. Negotiation runs
+	// after IPCP when SetIPv6 enabled it, and the link does not report up until
+	// it either completes or is abandoned, so the caller learns the IPv6
+	// identifiers (or their absence) in the same NetworkUp event as the IPv4
+	// addresses. ipv6Enabled/ipv6Strict are written only before Start.
+	ipv6Enabled, ipv6Strict       bool
+	ipv6ReqID                     byte
+	ipv6ConfigReq                 []byte // the outstanding request, for retransmission
+	ipv6LocalOpen, ipv6RemoteOpen bool
+	reqIID, peerIID               []byte // 8-byte interface identifiers; nil = none/absent
+	ipv6Restart                   restartTimer
 
 	authChallenge, peerChallenge [mschap.ChallengeLen]byte
 	ntResponse                   [mschap.NTResponseLen]byte
@@ -195,6 +216,18 @@ func (s *Session) SetMRU(mru int) {
 	s.lcpMRU = uint16(mru)
 }
 
+// SetIPv6 enables IPv6CP (RFC 5072) negotiation, which runs after IPCP and
+// before the link reports up. Call before Start. Servers without IPv6CP support
+// are not fatal by default: the negotiation is abandoned after a small request
+// budget and the link comes up carrying IPv4 alone. New leaves it disabled, so
+// a session that never calls this behaves exactly as before.
+func (s *Session) SetIPv6(enable bool) { s.ipv6Enabled = enable }
+
+// SetIPv6Strict makes a link whose IPv6CP negotiation did not complete fail
+// instead of degrading to IPv4-only. Call before Start; it is meaningful only
+// alongside SetIPv6(true).
+func (s *Session) SetIPv6Strict(strict bool) { s.ipv6Strict = strict }
+
 // Start opens the link by sending the initial LCP Configure-Request.
 func (s *Session) Start() {
 	s.mu.Lock()
@@ -222,6 +255,8 @@ func (s *Session) Receive(frame []byte) {
 		s.handleCHAP(payload)
 	case ProtocolIPCP:
 		s.handleIPCP(payload)
+	case ProtocolIPv6CP:
+		s.handleIPv6CP(payload)
 	}
 }
 
@@ -290,6 +325,7 @@ func (s *Session) failLocked(err error) {
 	s.phase = phaseClosed
 	s.lcpRestart.stop()
 	s.ipcpRestart.stop()
+	s.ipv6Restart.stop()
 	// Release a probe blocked on a reply that is never coming, so a link that
 	// has already declared itself dead does not also cost the caller a timeout.
 	if s.echoWait != nil {
@@ -689,12 +725,41 @@ func (s *Session) maybeIPCPUp() {
 	if s.phase != phaseIPCP || !s.ipcpLocalOpen || !s.ipcpRemoteOpen {
 		return
 	}
+	if s.ipv6Enabled {
+		// IPv6CP follows IPCP and precedes the up event, so both families'
+		// results reach the caller in one NetworkUp (see ipv6cp.go).
+		s.phase = phaseIPv6CP
+		s.startIPv6CP()
+		return
+	}
+	s.bringUpLocked()
+}
+
+// bringUpLocked reports the negotiated configuration to the handler. The IPv6
+// fields are set only when IPv6CP completed with a usable identifier on each
+// side; with SetIPv6Strict an incomplete IPv6 negotiation fails the link
+// instead of degrading, which is the only way strictness manifests.
+func (s *Session) bringUpLocked() {
+	if s.phase != phaseIPCP && s.phase != phaseIPv6CP {
+		return
+	}
+	negotiated := s.ipv6Enabled &&
+		s.ipv6LocalOpen && s.ipv6RemoteOpen &&
+		len(s.reqIID) == ipv6IIDLen && len(s.peerIID) == ipv6IIDLen
+	if s.ipv6Enabled && s.ipv6Strict && !negotiated {
+		s.failLocked(fmt.Errorf("%w: peer did not negotiate IPv6CP", ErrIPv6Negotiation))
+		return
+	}
 	s.phase = phaseUp
 	cfg := IPConfig{LocalIP: s.reqIP, PeerIP: s.peerIP}
 	for _, d := range []net.IP{s.reqDNS1, s.reqDNS2} {
 		if d != nil && !d.Equal(net.IPv4zero) {
 			cfg.DNS = append(cfg.DNS, d)
 		}
+	}
+	if negotiated {
+		cfg.LocalIP6 = net.IP(append([]byte(nil), s.reqIID...))
+		cfg.PeerIP6 = net.IP(append([]byte(nil), s.peerIID...))
 	}
 	s.h.NetworkUp(cfg)
 }

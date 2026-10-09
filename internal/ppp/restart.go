@@ -48,10 +48,18 @@ func (r *restartTimer) alive() { r.tries = 0 }
 // running until stopped or the attempt budget is spent. expired is called
 // instead once the budget runs out.
 func (r *restartTimer) arm(lock func(func()), resend func(), expired func()) {
+	r.armCustom(restartInterval, maxConfigure, lock, resend, expired)
+}
+
+// armCustom is arm with an explicit interval and attempt budget, for protocols
+// whose give-up should be faster or slower than the LCP/IPCP default (IPv6CP
+// gives up quickly: a silent peer on a reliable transport is one that does not
+// implement the protocol, and the caller wants the link rather than a stall).
+func (r *restartTimer) armCustom(interval time.Duration, maxTries int, lock func(func()), resend func(), expired func()) {
 	if r.timer != nil {
 		r.timer.Stop()
 	}
-	r.timer = time.AfterFunc(restartInterval, func() {
+	r.timer = time.AfterFunc(interval, func() {
 		lock(func() {
 			// A stop that raced this firing leaves timer nil; the request it
 			// covered is already answered, so there is nothing to resend.
@@ -59,7 +67,7 @@ func (r *restartTimer) arm(lock func(func()), resend func(), expired func()) {
 				return
 			}
 			r.tries++
-			if r.tries >= maxConfigure {
+			if r.tries >= maxTries {
 				r.stop()
 				expired()
 				return

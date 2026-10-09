@@ -1,0 +1,97 @@
+package com.slipstream.client
+
+import android.content.Context
+import com.slipstream.client.data.ProfileStore
+import com.slipstream.client.data.UsageEntry
+import com.slipstream.client.data.UsageStore
+import com.slipstream.client.model.Profile
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import java.io.File
+
+/** Where the app currently is. Screens are plain state, not a nav library. */
+sealed class Screen {
+    object Profiles : Screen()
+    data class Editor(val profileId: String?) : Screen()
+    object Connection : Screen()
+}
+
+/**
+ * Application state shared by the three screens: the profile list, lifetime
+ * usage, the selected profile for the connection screen, and navigation.
+ * The VPN service writes usage through [UsageStore] and bumps [usage] itself.
+ */
+object AppModel {
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    val screen = MutableStateFlow<Screen>(Screen.Profiles)
+    val profiles = MutableStateFlow<List<Profile>>(emptyList())
+    val usage = MutableStateFlow<Map<String, UsageEntry>>(emptyMap())
+    val selectedId = MutableStateFlow<String?>(null)
+
+    @Volatile
+    private var appDir: File? = null
+
+    fun init(context: Context) {
+        appDir = context.applicationContext.filesDir
+        UsageStore.init(context.applicationContext.filesDir)
+        refreshProfiles()
+        refreshUsage()
+        if (selectedId.value == null) {
+            selectedId.value = profiles.value.firstOrNull()?.id
+        }
+    }
+
+    private fun dir(): File = checkNotNull(appDir) { "AppModel.init must run first" }
+
+    fun refreshProfiles() {
+        runCatching { profiles.value = ProfileStore.load(dir()) }
+    }
+
+    fun refreshUsage() {
+        runCatching { usage.value = UsageStore.snapshot() }
+    }
+
+    fun profile(id: String?): Profile? = profiles.value.firstOrNull { it.id == id }
+
+    fun save(profile: Profile) {
+        val next = if (profiles.value.any { it.id == profile.id }) {
+            profiles.value.map { if (it.id == profile.id) profile else it }
+        } else {
+            profiles.value + profile
+        }
+        profiles.value = next
+        if (selectedId.value == null) selectedId.value = profile.id
+        scope.launch { ProfileStore.save(dir(), next) }
+    }
+
+    fun delete(id: String) {
+        val next = profiles.value.filterNot { it.id == id }
+        profiles.value = next
+        if (selectedId.value == id) selectedId.value = next.firstOrNull()?.id
+        scope.launch {
+            ProfileStore.save(dir(), next)
+            UsageStore.forget(id)
+            refreshUsage()
+        }
+    }
+
+    fun duplicate(id: String): Profile? {
+        val src = profile(id) ?: return null
+        val copy = src.copy(
+            id = Profile.newId(),
+            name = if (src.name.isBlank()) "Copy" else src.name + " copy",
+        )
+        save(copy)
+        return copy
+    }
+
+    /** Called by the service after every usage mutation so the UI follows. */
+    fun onUsageChanged() {
+        refreshUsage()
+    }
+}

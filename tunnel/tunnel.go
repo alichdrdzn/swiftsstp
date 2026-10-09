@@ -66,8 +66,25 @@ type Config struct {
 
 	MTU int // inner MTU; 0 = DefaultMTU
 
+	// EnableIPv6 negotiates IPv6CP (RFC 5072) alongside IPCP. Servers that do
+	// not implement IPv6CP (SoftEther, most SSTP deployments) are not fatal:
+	// the tunnel comes up IPv4-only with Result.IPv6Negotiated false, unless
+	// IPv6Strict is also set.
+	EnableIPv6 bool
+	// IPv6Strict fails the dial when IPv6CP does not complete, instead of
+	// degrading to IPv4-only. Meaningful only with EnableIPv6.
+	IPv6Strict bool
+
 	DialTimeout time.Duration // 0 = 20s for the TCP+TLS+PPP establishment
 	KeepAlive   time.Duration // LCP echo interval; 0 = 30s, negative disables
+
+	// DialConn, when non-nil, supplies the raw TCP connection instead of the
+	// internal tls.Dialer. Dial dials via this function (typically a plain
+	// net.Dialer, possibly with the socket already protected from routing by
+	// a VPN) and then wraps the returned conn with tls.Client using this
+	// config's tlsConfig, so SNI, MinVersion and verification mode are
+	// unchanged. The conn must already be connected to Server:Port.
+	DialConn func(network, addr string) (net.Conn, error)
 
 	Logger *slog.Logger
 }
@@ -137,6 +154,17 @@ type Result struct {
 	DNS     []net.IP
 	MTU     int
 
+	// LocalIP6/PeerIP6 are the IPv6CP-negotiated interface identifiers (RFC
+	// 5072), not full addresses: each side forms its own address from its IID,
+	// typically the link-local fe80::/64 plus LocalIP6. Both are nil unless
+	// IPv6Negotiated is true.
+	LocalIP6 net.IP
+	PeerIP6  net.IP
+	// IPv6Negotiated reports whether IPv6CP completed. A server without IPv6CP
+	// support leaves it false and the tunnel carries IPv4 — unless
+	// Config.IPv6Strict, which fails the dial instead of degrading.
+	IPv6Negotiated bool
+
 	ServerCertSHA256 string // fingerprint of the presented cert, for pinning UIs
 }
 
@@ -169,6 +197,18 @@ type Session struct {
 
 const inboundQueue = 512
 
+// NewStubSession returns a Session that owns no transport: Counters read zero,
+// Wait blocks until Close, and ReadIP/WriteIP fail once it is closed. It gives
+// code that consumes a *Session — reconnect managers, UI presenters, tests — a
+// real session value to hold without a server behind one.
+func NewStubSession() *Session {
+	return &Session{
+		inbound: make(chan []byte, inboundQueue),
+		done:    make(chan struct{}),
+		ipReady: make(chan struct{}),
+	}
+}
+
 // Dial establishes TCP+TLS, performs the MS-SSTP handshake and PPP
 // negotiation (LCP, MS-CHAPv2, crypto binding, IPCP), and returns a live
 // session plus the negotiated Result. On auth rejection the error satisfies
@@ -190,12 +230,26 @@ func Dial(ctx context.Context, cfg Config) (*Session, Result, error) {
 		return nil, zero, err
 	}
 
-	d := tls.Dialer{Config: tlsCfg}
-	tcp, err := d.DialContext(ctx, "tcp", addr)
-	if err != nil {
-		return nil, zero, fmt.Errorf("tunnel: dial %s: %w", addr, err)
+	var tlsConn *tls.Conn
+	if cfg.DialConn != nil {
+		raw, err := cfg.DialConn("tcp", addr)
+		if err != nil {
+			return nil, zero, fmt.Errorf("tunnel: dial %s: %w", addr, err)
+		}
+		tc := tls.Client(raw, tlsCfg)
+		if err := tc.HandshakeContext(ctx); err != nil {
+			_ = raw.Close()
+			return nil, zero, fmt.Errorf("tunnel: tls handshake: %w", err)
+		}
+		tlsConn = tc
+	} else {
+		d := tls.Dialer{Config: tlsCfg}
+		conn, err := d.DialContext(ctx, "tcp", addr)
+		if err != nil {
+			return nil, zero, fmt.Errorf("tunnel: dial %s: %w", addr, err)
+		}
+		tlsConn = conn.(*tls.Conn)
 	}
-	tlsConn := tcp.(*tls.Conn)
 
 	var certFP string
 	if pcs := tlsConn.ConnectionState().PeerCertificates; len(pcs) > 0 {
@@ -231,6 +285,8 @@ func Dial(ctx context.Context, cfg Config) (*Session, Result, error) {
 	if cfg.MTU != 0 {
 		s.ppp.SetMRU(cfg.MTU)
 	}
+	s.ppp.SetIPv6(cfg.EnableIPv6)
+	s.ppp.SetIPv6Strict(cfg.IPv6Strict)
 
 	// Establish within the dial timeout (or caller ctx): wait for IPCP up.
 	estCtx := ctx
@@ -254,8 +310,8 @@ func Dial(ctx context.Context, cfg Config) (*Session, Result, error) {
 	}
 
 	s.startKeepAlive()
-	logger.Printf("tunnel: up, local %s peer %s dns %v mtu %d",
-		s.result.LocalIP, s.result.PeerIP, s.result.DNS, s.result.MTU)
+	logger.Printf("tunnel: up, local %s peer %s dns %v mtu %d ipv6 %v",
+		s.result.LocalIP, s.result.PeerIP, s.result.DNS, s.result.MTU, s.result.IPv6Negotiated)
 	return s, s.result, nil
 }
 
@@ -380,6 +436,11 @@ func (s *Session) fail(err error) {
 func (s *Session) writePacket(pkt []byte) error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
+	if s.tlsConn == nil {
+		// A session that owns no connection (NewStubSession) has nothing to
+		// write to; report it rather than panicking on the nil conn.
+		return errors.New("tunnel: not connected")
+	}
 	_ = s.tlsConn.SetWriteDeadline(time.Now().Add(30 * time.Second))
 	_, err := s.tlsConn.Write(pkt)
 	return err
@@ -418,6 +479,9 @@ func (s *Session) NetworkUp(cfg ppp.IPConfig) {
 	s.result.LocalIP = cfg.LocalIP
 	s.result.PeerIP = cfg.PeerIP
 	s.result.DNS = cfg.DNS
+	s.result.LocalIP6 = cfg.LocalIP6
+	s.result.PeerIP6 = cfg.PeerIP6
+	s.result.IPv6Negotiated = cfg.LocalIP6 != nil && cfg.PeerIP6 != nil
 	close(s.ipReady)
 	if s.onState != nil {
 		s.onState(StateConnected, nil)

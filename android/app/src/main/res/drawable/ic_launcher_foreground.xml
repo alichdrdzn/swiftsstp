@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shield with a tunnel bore through it: the app's launcher glyph. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#6EA8FF"
+        android:pathData="M54,24 L80,34 L80,56 C80,72 69,84 54,90 C39,84 28,72 28,56 L28,34 Z" />
+    <path
+        android:fillColor="#0A0D13"
+        android:pathData="M54,36 C64,36 71,44 71,54 L71,74 L64,74 L64,54 C64,48 60,43 54,43 C48,43 44,48 44,54 L44,74 L37,74 L37,54 C37,44 44,36 54,36 Z" />
+</vector>

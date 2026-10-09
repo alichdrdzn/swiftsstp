@@ -15,10 +15,11 @@ package ppp
 
 // PPP protocol numbers (RFC 1661 and the "PPP DLL Protocol Numbers" registry).
 const (
-	ProtocolIP   = 0x0021
-	ProtocolIPCP = 0x8021
-	ProtocolLCP  = 0xc021
-	ProtocolCHAP = 0xc223
+	ProtocolIP     = 0x0021
+	ProtocolIPCP   = 0x8021
+	ProtocolIPv6CP = 0x8057
+	ProtocolLCP    = 0xc021
+	ProtocolCHAP   = 0xc223
 )
 
 // PPP HDLC address and control octets. Over SSTP there is no real HDLC layer,
