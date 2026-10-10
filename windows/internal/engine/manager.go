@@ -2,12 +2,14 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"sync"
 	"time"
 
+	"sstpflash/multi"
 	"sstpflash/tunnel"
 	"sstpflash/usage"
 	"sstpflash/windows/internal/dataplane"
@@ -16,28 +18,50 @@ import (
 // Status is the full connection snapshot pushed to the UI (as a Wails
 // event) and returned by Status queries.
 type Status struct {
-	State            string   `json:"state"` // disconnected|connecting|reconnecting|connected|auth_error|error
-	Mode             string   `json:"mode,omitempty"`
-	ProfileID        string   `json:"profile_id,omitempty"`
-	ProfileName      string   `json:"profile_name,omitempty"`
-	LocalIP          string   `json:"local_ip,omitempty"`
-	PeerIP           string   `json:"peer_ip,omitempty"`
-	DNS              []string `json:"dns,omitempty"`
-	MTU              int      `json:"mtu,omitempty"`
-	CertFingerprint  string   `json:"cert_fingerprint,omitempty"`
-	Up               uint64   `json:"up"`
-	Down             uint64   `json:"down"`
-	RateUp           uint64   `json:"rate_up"`
-	RateDown         uint64   `json:"rate_down"`
-	TotalUp          uint64   `json:"total_up"`
-	TotalDown        uint64   `json:"total_down"`
-	Sessions         int      `json:"sessions"`
-	ReconnectAttempts int     `json:"reconnect_attempts"`
-	LastError        string   `json:"last_error,omitempty"`
-	Since            string   `json:"since,omitempty"` // RFC3339, when the tunnel came up
-	SocksPort        int      `json:"socks_port,omitempty"`
-	HTTPPort         int      `json:"http_port,omitempty"`
-	SystemProxyOn    bool     `json:"system_proxy_on"`
+	State           string   `json:"state"` // disconnected|connecting|reconnecting|connected|auth_error|error
+	Mode            string   `json:"mode,omitempty"`
+	ProfileID       string   `json:"profile_id,omitempty"`
+	ProfileName     string   `json:"profile_name,omitempty"`
+	LocalIP         string   `json:"local_ip,omitempty"`
+	PeerIP          string   `json:"peer_ip,omitempty"`
+	DNS             []string `json:"dns,omitempty"`
+	MTU             int      `json:"mtu,omitempty"`
+	CertFingerprint string   `json:"cert_fingerprint,omitempty"`
+	Up              uint64   `json:"up"`
+	Down            uint64   `json:"down"`
+	RateUp          uint64   `json:"rate_up"`
+	RateDown        uint64   `json:"rate_down"`
+	TotalUp         uint64   `json:"total_up"`
+	TotalDown       uint64   `json:"total_down"`
+	Sessions        int      `json:"sessions"`
+	// Tunnels is the profile's configured parallel session count (1..8);
+	// TunnelSessions is the live per-session state from multi.Bundle.
+	Tunnels           int          `json:"tunnels"`
+	TunnelSessions    []TunnelStat `json:"tunnel_sessions,omitempty"`
+	Proxy             string       `json:"proxy,omitempty"` // upstream proxy in use; "" = direct
+	ReconnectAttempts int          `json:"reconnect_attempts"`
+	LastError         string       `json:"last_error,omitempty"`
+	Since             string       `json:"since,omitempty"` // RFC3339, when the tunnel came up
+	SocksPort         int          `json:"socks_port,omitempty"`
+	HTTPPort          int          `json:"http_port,omitempty"`
+	SystemProxyOn     bool         `json:"system_proxy_on"`
+}
+
+// TunnelStat is one bundled session's live state (JSON names match
+// multi.Bundle.StatsJSON so the snapshot can be decoded straight from it).
+type TunnelStat struct {
+	Index   int    `json:"index"`
+	LocalIP string `json:"local_ip,omitempty"`
+	Up      uint64 `json:"up"`
+	Down    uint64 `json:"down"`
+	Ready   bool   `json:"ready"`
+}
+
+// bundleStats is multi.Bundle.StatsJSON in struct form.
+type bundleStats struct {
+	Up       uint64       `json:"up"`
+	Down     uint64       `json:"down"`
+	Sessions []TunnelStat `json:"sessions"`
 }
 
 // Options wires the manager to its data planes and to the host application.
@@ -136,6 +160,8 @@ func (m *Manager) Connect(p Profile, mode Mode) error {
 		ProfileName: p.Name,
 		SocksPort:   p.SOCKSPort(),
 		HTTPPort:    p.HTTPPort(),
+		Tunnels:     p.TunnelCount(),
+		Proxy:       p.Proxy.Label(),
 	}
 	m.mu.Unlock()
 	m.emit()
@@ -196,7 +222,7 @@ func (m *Manager) run(cfg tunnel.Config, p Profile, mode Mode, stopCh, waitCh ch
 		})
 		m.opts.Logf("engine: dialing %s:%d (mode=%s attempt=%d)", p.Host, effectivePort(p.Port), mode, attempt)
 
-		sess, res, err := m.dial(cfg, stopCh)
+		sess, res, err := m.dial(cfg, p.TunnelCount(), stopCh)
 		if err != nil {
 			if tunnel.IsAuthError(err) {
 				m.opts.Logf("engine: authentication rejected: %v", err)
@@ -273,6 +299,8 @@ func (m *Manager) run(cfg tunnel.Config, p Profile, mode Mode, stopCh, waitCh ch
 		})
 		m.opts.Logf("engine: up local=%s peer=%s dns=%v mtu=%d cert=%s",
 			res.LocalIP, res.PeerIP, res.DNS, res.MTU, shortFingerprint(res.ServerCertSHA256))
+		m.opts.Logf("engine: bundle ready: %d tunnel session(s), upstream proxy %s",
+			p.TunnelCount(), proxyOrDirect(p))
 
 		sessionErr := m.pumpStats(sess, p, mode, stopCh)
 
@@ -316,8 +344,13 @@ func (m *Manager) run(cfg tunnel.Config, p Profile, mode Mode, stopCh, waitCh ch
 	}
 }
 
-// dial performs one tunnel.Dial, cancellable by stopCh.
-func (m *Manager) dial(cfg tunnel.Config, stopCh chan struct{}) (*tunnel.Session, tunnel.Result, error) {
+// dial establishes one multi-session bundle, cancellable by stopCh. The
+// first slot is dialed synchronously and its Result (the primary inner
+// address the data plane is configured with) is returned; the remaining
+// sessions fill in the background and redial themselves with backoff.
+// Every dial reuses cfg, so profile.proxy applies to the outer transport of
+// every session.
+func (m *Manager) dial(cfg tunnel.Config, sessions int, stopCh chan struct{}) (*multi.Bundle, tunnel.Result, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan struct{})
@@ -329,14 +362,27 @@ func (m *Manager) dial(cfg tunnel.Config, stopCh chan struct{}) (*tunnel.Session
 		case <-done:
 		}
 	}()
-	return tunnel.Dial(ctx, cfg)
+	return multi.Dial(ctx, multi.Config{
+		Sessions: sessions,
+		Logger:   newSlogAdapter(m.opts.Logf),
+		Dial: func(dctx context.Context) (multi.Session, tunnel.Result, error) {
+			s, res, err := tunnel.Dial(dctx, cfg)
+			if err != nil {
+				var zero tunnel.Result
+				return nil, zero, err
+			}
+			return s, res, nil
+		},
+	})
 }
 
-// pumpStats samples counters once per second until the session or the
-// manager stops. Returns the session's close cause.
-func (m *Manager) pumpStats(sess *tunnel.Session, p Profile, mode Mode, stopCh chan struct{}) error {
-	sessDone := make(chan error, 1)
-	go func() { sessDone <- sess.Wait() }()
+// pumpStats samples the bundle once per second until it or the manager
+// stops, publishing aggregate counters, rates and the per-session chips.
+// Returns the cause of the tunnel going away (nil only when the manager
+// itself stopped it).
+func (m *Manager) pumpStats(b *multi.Bundle, p Profile, mode Mode, stopCh chan struct{}) error {
+	bundleDone := make(chan error, 1)
+	go func() { bundleDone <- b.Wait() }()
 
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
@@ -346,24 +392,50 @@ func (m *Manager) pumpStats(sess *tunnel.Session, p Profile, mode Mode, stopCh c
 		pendingUp        uint64
 		pendingDown      uint64
 		ticks            int
+		downTicks        int // consecutive seconds with zero ready sessions
 	)
 	for {
 		select {
 		case <-stopCh:
-			_ = sess.Close()
-			err := <-sessDone
+			_ = b.Close()
+			err := <-bundleDone
 			m.addUsage(p, pendingUp, pendingDown)
 			return err
-		case err := <-sessDone:
+		case err := <-bundleDone:
 			m.addUsage(p, pendingUp, pendingDown)
 			return err
 		case <-tick.C:
-			up, down := sess.Counters()
-			du, dd := up-lastUp, down-lastDown
+			var st bundleStats
+			if err := json.Unmarshal([]byte(b.StatsJSON()), &st); err != nil {
+				continue
+			}
+			up, down := st.Up, st.Down
+			// A slot that reconnects restarts at zero, so the aggregate can
+			// go backwards; never let the delta underflow into usage.
+			du, dd := uint64(0), uint64(0)
+			if up >= lastUp {
+				du = up - lastUp
+			}
+			if down >= lastDown {
+				dd = down - lastDown
+			}
 			lastUp, lastDown = up, down
 			pendingUp += du
 			pendingDown += dd
 			ticks++
+
+			ready := 0
+			for _, s := range st.Sessions {
+				if s.Ready {
+					ready++
+				}
+			}
+			if ready == 0 {
+				downTicks++
+			} else {
+				downTicks = 0
+			}
+
 			if m.opts.Usage != nil && ticks%15 == 0 {
 				m.addUsage(p, pendingUp, pendingDown)
 				pendingUp, pendingDown = 0, 0
@@ -381,10 +453,29 @@ func (m *Manager) pumpStats(sess *tunnel.Session, p Profile, mode Mode, stopCh c
 				s.TotalUp = totalUp + pendingUp
 				s.TotalDown = totalDown + pendingDown
 				s.Sessions = sessions
+				s.TunnelSessions = st.Sessions
 			})
+
+			// The bundle redials each slot forever with backoff, so a single
+			// dead session is normal. If EVERY slot has been down for a
+			// minute the bundle is not coming back on its own (e.g. all
+			// slots hit a permanent auth failure): surface it so the
+			// manager's own reconnect/error policy takes over.
+			if downTicks >= allSessionsDownGrace {
+				m.addUsage(p, pendingUp, pendingDown)
+				err := fmt.Errorf("engine: all %d tunnel sessions are down", len(st.Sessions))
+				_ = b.Close() // never leak the old bundle into a reconnect
+				return err
+			}
 		}
 	}
 }
+
+// allSessionsDownGrace is how many consecutive 1s ticks with zero ready
+// sessions the bundle gets to heal itself before the manager steps in.
+// Longer than multi's 30s maximum reconnect backoff, so a healthy bundle
+// mid-redial never trips it.
+const allSessionsDownGrace = 60
 
 // addUsage writes accumulated byte deltas through to usage-stats.json.
 func (m *Manager) addUsage(p Profile, up, down uint64) {
@@ -406,6 +497,7 @@ func (m *Manager) finish(state, lastErr string, stopCh chan struct{}) {
 		s.State = state
 		s.LastError = lastErr
 		s.RateUp, s.RateDown = 0, 0
+		s.TunnelSessions = nil
 		if state == "disconnected" {
 			s.LocalIP, s.PeerIP, s.CertFingerprint, s.Since = "", "", "", ""
 			s.ReconnectAttempts = 0
@@ -555,4 +647,12 @@ func shortFingerprint(fp string) string {
 		return fp[:16]
 	}
 	return fp
+}
+
+// proxyOrDirect renders the upstream proxy for human-readable log lines.
+func proxyOrDirect(p Profile) string {
+	if l := p.Proxy.Label(); l != "" {
+		return l
+	}
+	return "direct"
 }

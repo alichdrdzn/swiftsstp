@@ -83,8 +83,11 @@ func ensureDLL() error {
 	return dllErr
 }
 
-// Start wires everything for a live session.
-func (m *Manager) Start(sess *tunnel.Session, res tunnel.Result, cfg dataplane.Config) error {
+// Start wires everything for a live session. sess is the engine's Stream —
+// normally the multi.Bundle, so the adapter carries every bundled session's
+// traffic (striped by flow affinity inside the bundle) while being
+// configured from the primary's Result.
+func (m *Manager) Start(sess dataplane.Stream, res tunnel.Result, cfg dataplane.Config) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.started {
@@ -182,8 +185,8 @@ func (m *Manager) configure(res tunnel.Result, cfg dataplane.Config) ([]undoOp, 
 	}
 }
 
-// tunToTunnel: Wintun -> SSTP.
-func (m *Manager) tunToTunnel(dev tun.Device, sess *tunnel.Session, stop chan struct{}) {
+// tunToTunnel: Wintun -> SSTP (or -> bundle, which picks the session).
+func (m *Manager) tunToTunnel(dev tun.Device, sess dataplane.Stream, stop chan struct{}) {
 	defer m.wg.Done()
 	bufs := [][]byte{make([]byte, 65535)}
 	sizes := make([]int, 1)
@@ -209,8 +212,9 @@ func (m *Manager) tunToTunnel(dev tun.Device, sess *tunnel.Session, stop chan st
 	}
 }
 
-// tunnelToTun: SSTP -> Wintun.
-func (m *Manager) tunnelToTun(dev tun.Device, sess *tunnel.Session, stop chan struct{}) {
+// tunnelToTun: SSTP -> Wintun (packets arrive merged from every session,
+// already DNAT'd to the primary inner address).
+func (m *Manager) tunnelToTun(dev tun.Device, sess dataplane.Stream, stop chan struct{}) {
 	defer m.wg.Done()
 	buf := make([]byte, 65535)
 	for {

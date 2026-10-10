@@ -27,17 +27,17 @@ type Proxy struct {
 	cfg Config
 
 	mu   sync.Mutex
-	vn   *virtualNet // active netstack; nil while the tunnel is down
-	sess *tunnel.Session
+	vn   *virtualNet      // active netstack; nil while the tunnel is down
+	sess dataplane.Stream // *tunnel.Session or *multi.Bundle
 	res  tunnel.Result
 
-	socksLn     net.Listener
-	httpLn      net.Listener
-	boundSOCKS  int
-	boundHTTP   int
-	conns    map[net.Conn]struct{}
-	closing  bool // true while Close() is tearing listeners down
-	wg       sync.WaitGroup // accept loops + in-flight handlers
+	socksLn    net.Listener
+	httpLn     net.Listener
+	boundSOCKS int
+	boundHTTP  int
+	conns      map[net.Conn]struct{}
+	closing    bool           // true while Close() is tearing listeners down
+	wg         sync.WaitGroup // accept loops + in-flight handlers
 }
 
 // New builds the proxy data plane. Ports fall back to 10808/10809.
@@ -58,7 +58,11 @@ func New(cfg Config) *Proxy {
 func (p *Proxy) Ports() (socks, http int) { return p.cfg.SOCKSPort, p.cfg.HTTPPort }
 
 // Start binds listeners if needed and attaches a fresh netstack to sess.
-func (p *Proxy) Start(sess *tunnel.Session, res tunnel.Result, cfg dataplane.Config) error {
+// sess is normally the engine's *multi.Bundle: one netstack, N underlying
+// SSTP sessions. The bundle stripes accepted flows across them by 5-tuple
+// affinity (with per-flow failover to any ready session), so the local
+// inbounds need no awareness of the session count at all.
+func (p *Proxy) Start(sess dataplane.Stream, res tunnel.Result, cfg dataplane.Config) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	// Profile may carry different listener ports than the previous one:
@@ -145,8 +149,8 @@ func (p *Proxy) Close() error {
 	return nil
 }
 
-// current returns the live stack + session (either may be nil).
-func (p *Proxy) current() (*virtualNet, *tunnel.Session) {
+// current returns the live stack + stream (either may be nil).
+func (p *Proxy) current() (*virtualNet, dataplane.Stream) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.vn, p.sess

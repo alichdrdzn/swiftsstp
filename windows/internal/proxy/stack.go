@@ -18,6 +18,7 @@ import (
 	"gvisor.dev/gvisor/pkg/tcpip/transport/udp"
 
 	"sstpflash/tunnel"
+	"sstpflash/windows/internal/dataplane"
 )
 
 const nicID = tcpip.NICID(1)
@@ -30,19 +31,21 @@ type virtualNet struct {
 	stack *stack.Stack
 	link  *channel.Endpoint
 
-	localIP   net.IP  // our inner address (source of every dial)
-	proto     tcpip.NetworkProtocolNumber
-	dns       []net.IP
-	ipv4OK    bool // default route for family installed (profile toggle)
-	ipv6OK    bool
+	localIP net.IP // our inner address (source of every dial)
+	proto   tcpip.NetworkProtocolNumber
+	dns     []net.IP
+	ipv4OK  bool // default route for family installed (profile toggle)
+	ipv6OK  bool
 
 	cancel context.CancelFunc
 	wg     sync.WaitGroup // both packet pumps
 }
 
-// newVirtualNet builds the stack for one session and starts the packet
-// pumps. dns must already reflect the profile's resolver override.
-func newVirtualNet(sess *tunnel.Session, res tunnel.Result, dns []net.IP, ipv4OK, ipv6OK bool, logf func(string, ...any)) (*virtualNet, error) {
+// newVirtualNet builds the stack for one stream and starts the packet
+// pumps. dns must already reflect the profile's resolver override. sess is
+// the engine's Stream: a single tunnel.Session or the multi.Bundle that
+// merges N sessions behind one inner address — the pumps do not care which.
+func newVirtualNet(sess dataplane.Stream, res tunnel.Result, dns []net.IP, ipv4OK, ipv6OK bool, logf func(string, ...any)) (*virtualNet, error) {
 	mtu := res.MTU
 	if mtu <= 0 {
 		mtu = tunnel.DefaultMTU

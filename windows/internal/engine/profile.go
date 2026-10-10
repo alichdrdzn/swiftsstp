@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"sstpflash/multi"
 	"sstpflash/tunnel"
 )
 
@@ -50,24 +51,68 @@ func (a AutoReconnect) max() time.Duration {
 	return time.Duration(m) * time.Millisecond
 }
 
+// Proxy is the upstream proxy for the OUTER transport (docs/PROFILE_SCHEMA.md
+// "proxy", v2rayN-style outbound): the TCP connection the TLS+SSTP carrier
+// rides on goes through it, so every session of the profile dials the server
+// through HTTP CONNECT or SOCKS5. Type "" means direct.
+type Proxy struct {
+	Type     string `json:"type"` // "" (direct) | "http" (CONNECT) | "socks5"
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	Username string `json:"username"` // optional
+	Password string `json:"password"` // optional
+}
+
+// Configured reports whether a proxy type was chosen (even an invalid one;
+// Validate rejects those).
+func (p Proxy) Configured() bool { return p.Type != "" }
+
+// Label renders the proxy for the UI/status, "" when direct.
+func (p Proxy) Label() string {
+	if !p.Configured() {
+		return ""
+	}
+	s := p.Type + "://" + p.Host + ":" + strconv.Itoa(p.Port)
+	if p.Username != "" {
+		s = p.Type + "://" + p.Username + "@" + p.Host + ":" + strconv.Itoa(p.Port)
+	}
+	return s
+}
+
+// tunnelProxy converts to the engine's dial parameter; nil = direct.
+func (p Proxy) tunnelProxy() *tunnel.ProxyConfig {
+	if !p.Configured() {
+		return nil
+	}
+	return &tunnel.ProxyConfig{
+		Type:     p.Type,
+		Host:     p.Host,
+		Port:     p.Port,
+		Username: p.Username,
+		Password: p.Password,
+	}
+}
+
 // Profile is one saved server profile (docs/PROFILE_SCHEMA.md v1 plus
 // app-specific extras under Extras).
 type Profile struct {
-	ID           string         `json:"id"`
-	Name         string         `json:"name"`
-	Host         string         `json:"host"`
-	Port         int            `json:"port"`
-	SNI          string         `json:"sni"`
-	Username     string         `json:"username"`
-	Password     string         `json:"password"`
-	TLSMode      string         `json:"tls_mode"` // verify | insecure | custom_ca
-	CAPath       string         `json:"ca_path"`
-	MTU          int            `json:"mtu"`
-	IPv4Enabled  bool           `json:"ipv4_enabled"`
-	IPv6Enabled  bool           `json:"ipv6_enabled"`
-	DNSOverride  []string       `json:"dns_override"`
-	AutoReconnect AutoReconnect `json:"auto_reconnect"`
-	Extras       map[string]any `json:"extras"`
+	ID            string         `json:"id"`
+	Name          string         `json:"name"`
+	Host          string         `json:"host"`
+	Port          int            `json:"port"`
+	SNI           string         `json:"sni"`
+	Username      string         `json:"username"`
+	Password      string         `json:"password"`
+	TLSMode       string         `json:"tls_mode"` // verify | insecure | custom_ca
+	CAPath        string         `json:"ca_path"`
+	MTU           int            `json:"mtu"`
+	IPv4Enabled   bool           `json:"ipv4_enabled"`
+	IPv6Enabled   bool           `json:"ipv6_enabled"`
+	DNSOverride   []string       `json:"dns_override"`
+	AutoReconnect AutoReconnect  `json:"auto_reconnect"`
+	Proxy         Proxy          `json:"proxy"`   // upstream proxy, "" type = direct
+	Tunnels       int            `json:"tunnels"` // parallel SSTP sessions, 1..8
+	Extras        map[string]any `json:"extras"`
 }
 
 // ProfilesFile is the on-disk wrapper for profiles.json.
@@ -79,15 +124,30 @@ type ProfilesFile struct {
 // NewProfile returns a profile with schema defaults.
 func NewProfile() Profile {
 	return Profile{
-		Port:         443,
-		TLSMode:      "verify",
-		MTU:          0,
-		IPv4Enabled:  true,
-		IPv6Enabled:  false,
-		DNSOverride:  []string{},
+		Port:          443,
+		TLSMode:       "verify",
+		MTU:           0,
+		IPv4Enabled:   true,
+		IPv6Enabled:   false,
+		DNSOverride:   []string{},
 		AutoReconnect: AutoReconnect{Enabled: true, InitialBackoffMS: 1000, MaxBackoffMS: 30000},
-		Extras:       map[string]any{},
+		Proxy:         Proxy{},
+		Tunnels:       1,
+		Extras:        map[string]any{},
 	}
+}
+
+// TunnelCount is the number of parallel SSTP sessions to bundle for this
+// profile, clamped to 1..multi.MaxSessions. Profiles written before the
+// field existed decode as 0 and therefore get the default of 1.
+func (p Profile) TunnelCount() int {
+	if p.Tunnels < 1 {
+		return 1
+	}
+	if p.Tunnels > multi.MaxSessions {
+		return multi.MaxSessions
+	}
+	return p.Tunnels
 }
 
 // SOCKSPort is the profile's SOCKS5 inbound port (extras.socks_port).
@@ -179,6 +239,25 @@ func (p Profile) Validate() error {
 			return fmt.Errorf("profile: read ca file: %w", err)
 		}
 	}
+	// Upstream proxy (optional; absent/empty type = direct).
+	if p.Proxy.Configured() {
+		switch p.Proxy.Type {
+		case "http", "socks5":
+		default:
+			return fmt.Errorf("profile: unknown proxy type %q (want http or socks5)", p.Proxy.Type)
+		}
+		if p.Proxy.Host == "" {
+			return fmt.Errorf("profile: proxy host is required when a proxy type is set")
+		}
+		if p.Proxy.Port < 1 || p.Proxy.Port > 65535 {
+			return fmt.Errorf("profile: invalid proxy port")
+		}
+	}
+	// Tunnels: 0 means "field absent" in profiles saved before multi-tunnel
+	// support, which TunnelCount() treats as the default of 1.
+	if p.Tunnels != 0 && (p.Tunnels < 1 || p.Tunnels > multi.MaxSessions) {
+		return fmt.Errorf("profile: tunnels must be 1..%d", multi.MaxSessions)
+	}
 	return nil
 }
 
@@ -206,6 +285,11 @@ func (p Profile) tunnelConfig(logf func(string, ...any)) (tunnel.Config, error) 
 		}
 		cfg.TLSMode = tunnel.TLSCustomCA
 		cfg.CACerts = pem
+	}
+	// Upstream proxy for the OUTER transport; applied by every session dial
+	// (multi.Dial reuses this same config for the background slots too).
+	if px := p.Proxy.tunnelProxy(); px != nil {
+		cfg.Proxy = px
 	}
 	return cfg, nil
 }

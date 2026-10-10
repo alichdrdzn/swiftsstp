@@ -45,12 +45,25 @@ type Config struct {
 	HTTPPort  int
 }
 
+// Stream is the inner-packet source/sink a data plane pumps. *tunnel.Session
+// (one SSTP link) and *multi.Bundle (N bundled links, flow-affinity striped
+// with client-side SNAT/DNAT) both satisfy it, so a data plane cannot tell
+// single- from multi-tunnel operation: ReadIP yields packets addressed to the
+// primary inner IP and WriteIP accepts packets sourced from it either way.
+type Stream interface {
+	ReadIP(buf []byte) (int, error)
+	WriteIP(pkt []byte) error
+	Counters() (up, down uint64)
+	Wait() error
+	Close() error
+}
+
 // DataPlane is one packet sink for a live tunnel session. Start is called
 // after each successful (re)connect, Stop when that session ends, Close when
 // the user disconnects for good. Implementations must tolerate
 // Start-after-Close (the user can reconnect after disconnecting).
 type DataPlane interface {
-	Start(sess *tunnel.Session, res tunnel.Result, cfg Config) error
+	Start(sess Stream, res tunnel.Result, cfg Config) error
 	Stop()
 	Close() error
 }
