@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -66,6 +67,9 @@ fun ConnectionScreen(
 ) {
     val selected = profiles.firstOrNull { it.id == selectedId } ?: profiles.firstOrNull()
     val entry: UsageEntry? = selected?.let { usage[it.id] }
+    // What the profile is configured for, surfaced as chips by the state card.
+    val tunnelsCount = selected?.tunnels ?: 1
+    val proxyLabel = selected?.proxy?.label() ?: ""
 
     var menuOpen by remember { mutableStateOf(false) }
 
@@ -154,6 +158,21 @@ fun ConnectionScreen(
                         )
                     }
                 }
+                if (tunnelsCount > 1 || proxyLabel.isNotBlank()) {
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        if (tunnelsCount > 1) {
+                            InfoChip("$tunnelsCount tunnels", AccentBlue)
+                        }
+                        if (proxyLabel.isNotBlank()) {
+                            InfoChip("via $proxyLabel", Amber)
+                        }
+                    }
+                }
                 Spacer(Modifier.height(10.dp))
                 Text(
                     text = vpn.message,
@@ -232,6 +251,50 @@ fun ConnectionScreen(
                         sub = vpn.dns.joinToString(", ").ifBlank { null }?.let { "dns $it" },
                         modifier = Modifier.weight(1f),
                     )
+                }
+            }
+
+            // ---- per-session stats (Bundle path only) -------------------
+            if (vpn.sessions.isNotEmpty()) {
+                SectionCard("Tunnels (${vpn.sessions.size})") {
+                    vpn.sessions.forEach { s ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                text = "#${s.index + 1}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.width(26.dp),
+                            )
+                            Text(
+                                text = s.localIp.ifBlank { "—" },
+                                style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                                modifier = Modifier.weight(1f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = "↑" + formatBytes(s.up),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Mint,
+                            )
+                            Text(
+                                text = "↓" + formatBytes(s.down),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = AccentBlue,
+                            )
+                            Text(
+                                text = if (s.ready) "READY" else "DOWN",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (s.ready) Mint else Rose,
+                            )
+                        }
+                    }
                 }
             }
 

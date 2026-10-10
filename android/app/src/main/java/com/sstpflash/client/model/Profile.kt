@@ -27,6 +27,41 @@ data class AppRules(
     }
 }
 
+/**
+ * Upstream proxy for the OUTER transport, schema field `proxy`:
+ *  - [type]: "" (direct) | "http" (HTTP CONNECT) | "socks5"
+ * Credentials are optional; host/port are required when a mode is chosen.
+ * When set, every session of the profile connects through it.
+ */
+data class ProxySettings(
+    val type: String = TYPE_NONE,
+    val host: String = "",
+    val port: Int = 0,
+    val username: String = "",
+    val password: String = "",
+) {
+    /** True when an actual proxy mode (not "None") is configured. */
+    val enabled: Boolean
+        get() = type == TYPE_HTTP || type == TYPE_SOCKS5
+
+    /** "HTTP 1.2.3.4:8080" for the in-use indicator; "" when direct. */
+    fun label(): String {
+        if (!enabled) return ""
+        val target = host.ifBlank { "?" }
+        val portText = if (port > 0) port.toString() else "?"
+        return "${type.uppercase()} $target:$portText"
+    }
+
+    companion object {
+        const val TYPE_NONE = ""
+        const val TYPE_HTTP = "http"
+        const val TYPE_SOCKS5 = "socks5"
+
+        /** Modes in UI order: None, HTTP CONNECT, SOCKS5. */
+        val TYPES = listOf(TYPE_NONE, TYPE_HTTP, TYPE_SOCKS5)
+    }
+}
+
 /** One entry of `profiles.json`, exactly the shape in docs/PROFILE_SCHEMA.md. */
 data class Profile(
     val id: String,
@@ -43,6 +78,8 @@ data class Profile(
     val ipv6Enabled: Boolean = false,
     val dnsOverride: List<String> = emptyList(),
     val autoReconnect: AutoReconnect = AutoReconnect(),
+    val proxy: ProxySettings = ProxySettings(),
+    val tunnels: Int = 1,
     val rules: AppRules = AppRules(),
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
@@ -64,6 +101,14 @@ data class Profile(
             put("initial_backoff_ms", autoReconnect.initialBackoffMs)
             put("max_backoff_ms", autoReconnect.maxBackoffMs)
         })
+        put("proxy", JSONObject().apply {
+            put("type", proxy.type)
+            put("host", proxy.host)
+            put("port", proxy.port)
+            put("username", proxy.username)
+            put("password", proxy.password)
+        })
+        put("tunnels", tunnels.coerceIn(MIN_TUNNELS, MAX_TUNNELS))
         put("extras", JSONObject().apply {
             put("allowed_apps", JSONArray(rules.packages))
             put("app_rule", rules.mode)
@@ -80,6 +125,10 @@ data class Profile(
         const val TLS_VERIFY = "verify"
         const val TLS_INSECURE = "insecure"
         const val TLS_CUSTOM_CA = "custom_ca"
+
+        /** Parallel sessions per profile, schema field `tunnels` (1..8). */
+        const val MIN_TUNNELS = 1
+        const val MAX_TUNNELS = 8
 
         private val random = SecureRandom()
 
@@ -103,6 +152,12 @@ data class Profile(
             val extras = o.optJSONObject("extras")
             val dns = o.optJSONArray("dns_override")
             val allowed = extras?.optJSONArray("allowed_apps")
+            // Older files predate `proxy`/`tunnels`: both are optional and
+            // fall back to direct / a single session.
+            val px = o.optJSONObject("proxy")
+            val proxyType = px?.optString("type", ProxySettings.TYPE_NONE)
+                ?.let { if (it in ProxySettings.TYPES) it else ProxySettings.TYPE_NONE }
+                ?: ProxySettings.TYPE_NONE
             return Profile(
                 id = o.optString("id").ifBlank { newId() },
                 name = o.optString("name"),
@@ -139,6 +194,14 @@ data class Profile(
                         }
                     },
                 ),
+                proxy = ProxySettings(
+                    type = proxyType,
+                    host = px?.optString("host", "") ?: "",
+                    port = px?.optInt("port", 0) ?: 0,
+                    username = px?.optString("username", "") ?: "",
+                    password = px?.optString("password", "") ?: "",
+                ),
+                tunnels = o.optInt("tunnels", MIN_TUNNELS).coerceIn(MIN_TUNNELS, MAX_TUNNELS),
             )
         }
     }

@@ -6,7 +6,7 @@
 //
 // Typical Android use:
 //
-//	c := mobile.NewClient("vpn.example.com", 443, "", "user", "pass", 1, nil, 0, 30)
+//	c := mobile.NewClient("vpn.example.com", 443, "", "user", "pass", 1, nil, 0, 30, "", "", 0, "", "")
 //	c.SetProtector(protector)   // VpnService.protect(fd) bridge
 //	if err := c.Connect(20000); err != nil { ... }
 //	for { pkt := c.ReadIP(); if pkt == nil { break }; tunFd.write(pkt) }
@@ -56,6 +56,9 @@ type Client struct {
 	caPem   []byte
 	mtu     int
 	kaSec   int
+	// proxy is the upstream proxy for the OUTER transport (nil = direct);
+	// built once in NewClient from the flattened proxy parameters.
+	proxy *tunnel.ProxyConfig
 
 	mu       sync.Mutex
 	prot     Protector
@@ -74,7 +77,11 @@ type Client struct {
 // the engine default (1400); keepaliveSec 0 means the engine default (30s)
 // and a negative value disables LCP echo entirely; caPem is only read when
 // tlsMode is TLSCustomCA.
-func NewClient(host string, port int, sni, user, pass string, tlsMode int, caPem []byte, mtu int, keepaliveSec int) *Client {
+//
+// proxyType ("", "http", "socks5"), proxyHost, proxyPort, proxyUser and
+// proxyPass configure the upstream proxy for the OUTER transport; a blank
+// proxyType means the session dials the server directly.
+func NewClient(host string, port int, sni, user, pass string, tlsMode int, caPem []byte, mtu int, keepaliveSec int, proxyType string, proxyHost string, proxyPort int, proxyUser string, proxyPass string) *Client {
 	if tlsMode < 0 || tlsMode > tlsModeLimit {
 		tlsMode = TLSVerify
 	}
@@ -85,7 +92,8 @@ func NewClient(host string, port int, sni, user, pass string, tlsMode int, caPem
 	return &Client{
 		host: host, port: port, sni: sni, user: user, pass: pass,
 		tlsMode: tlsMode, caPem: ca, mtu: mtu, kaSec: keepaliveSec,
-		ring: newLogRing(),
+		proxy: newProxy(proxyType, proxyHost, proxyPort, proxyUser, proxyPass),
+		ring:  newLogRing(),
 	}
 }
 
@@ -173,13 +181,22 @@ func (c *Client) Connect(timeoutMs int) error {
 // dialConn is tunnel.Config.DialConn: open the TCP socket, hand its fd to
 // the protector before the connection is used, and return the raw conn for
 // the engine to wrap with tls.Client (same SNI, same MinVersion).
+//
+// With an upstream proxy configured the whole hop — protected dial to the
+// proxy plus its CONNECT/SOCKS5 handshake — happens here too: tunnel.Dial
+// gives DialConn precedence over Config.Proxy, and the proxy socket needs
+// the protector just as much as a direct one.
 func (c *Client) dialConn(network, addr string) (net.Conn, error) {
 	c.mu.Lock()
 	p := c.prot
 	ctx := c.dialCtx
+	px := c.proxy
 	c.mu.Unlock()
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	if px != nil {
+		return proxyDial(p, ctx, px, network, addr)
 	}
 	return protectDial(p, ctx, network, addr)
 }

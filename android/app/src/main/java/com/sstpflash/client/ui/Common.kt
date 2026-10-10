@@ -134,6 +134,28 @@ fun StateChip(state: VpnController.State, modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * Tonal pill for a secondary fact about the connection — tunnel count,
+ * upstream proxy, anything the user should see at a glance.
+ */
+@Composable
+fun InfoChip(text: String, color: Color, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(999.dp),
+        color = color.copy(alpha = 0.13f),
+        contentColor = color,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+        )
+    }
+}
+
 /** A compact "label over value" statistic cell. */
 @Composable
 fun StatCell(

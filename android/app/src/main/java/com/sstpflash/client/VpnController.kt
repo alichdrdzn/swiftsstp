@@ -16,6 +16,19 @@ object VpnController {
 
     enum class State { DISCONNECTED, CONNECTING, CONNECTED, RECONNECTING, ERROR }
 
+    /**
+     * One row of the bundle's per-session stats (from Bundle.StatsJSON):
+     * session index, inner address, counters and whether it currently
+     * carries traffic.
+     */
+    data class SessionStat(
+        val index: Int,
+        val localIp: String,
+        val up: Long,
+        val down: Long,
+        val ready: Boolean,
+    )
+
     data class Snapshot(
         val state: State = State.DISCONNECTED,
         val profileId: String? = null,
@@ -32,6 +45,12 @@ object VpnController {
         val certSha256: String = "",
         val ipv6Negotiated: Boolean = false,
         val reconnectAttempt: Int = 0,
+        /** Profile's parallel-session count for the live connection. */
+        val tunnels: Int = 1,
+        /** "HTTP host:port" / "SOCKS5 host:port" when the profile proxies. */
+        val proxyLabel: String = "",
+        /** Per-session rows; empty on the single-session (Client) path. */
+        val sessions: List<SessionStat> = emptyList(),
     ) {
         val active: Boolean
             get() = state == State.CONNECTING || state == State.CONNECTED || state == State.RECONNECTING
@@ -89,6 +108,9 @@ object VpnController {
                     upRate = 0,
                     downRate = 0,
                     reconnectAttempt = 0,
+                    tunnels = 1,
+                    proxyLabel = "",
+                    sessions = emptyList(),
                 )
             }
         }

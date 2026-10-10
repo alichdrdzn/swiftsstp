@@ -17,6 +17,7 @@ import com.sstpflash.client.data.UsageStore
 import com.sstpflash.client.model.AppRules
 import com.sstpflash.client.model.Profile
 import org.json.JSONObject
+import sstpflash.mobile.Bundle
 import sstpflash.mobile.Client
 import sstpflash.mobile.Mobile
 import sstpflash.mobile.Protector
@@ -30,8 +31,10 @@ import java.util.concurrent.CountDownLatch
 /**
  * Foreground VpnService that owns the tunnel lifecycle:
  *
- *  1. build the gomobile client, handing it [protect] so the engine socket
- *     escapes the TUN it is carrying;
+ *  1. build the gomobile engine — the single-session Client, or the Bundle
+ *     when the profile asks for 2..8 parallel tunnels — handing it
+ *     [protect] so every engine socket escapes the TUN it is carrying,
+ *     and the profile's upstream proxy so the outer transport can ride it;
  *  2. establish the TUN from the negotiated [Stats];
  *  3. bridge packets — TUN reads into `writeIP`, `readIP` into TUN writes;
  *  4. on failure, reconnect with exponential backoff per the profile, but
@@ -51,6 +54,7 @@ class SstpflashVpnService : VpnService() {
         private const val KEEPALIVE_SEC = 30
         private const val USAGE_FLUSH_MS = 10_000L
         private const val MIN_BACKOFF_MS = 500L
+        private const val TOTAL_FAILURE_TICKS = 3
 
         private val TIME_FMT = DateTimeFormatter.ofPattern("HH:mm:ss")
 
@@ -68,7 +72,13 @@ class SstpflashVpnService : VpnService() {
 
     @Volatile private var active = false
     @Volatile private var profile: Profile? = null
-    @Volatile private var client: Client? = null
+
+    /**
+     * The live engine, either the single-session [Client] or the
+     * multi-session [Bundle], behind one small interface so the loop,
+     * bridge and ticker never care which one the profile picked.
+     */
+    @Volatile private var engine: Tunnel? = null
     private var worker: Thread? = null
 
     private var tunPfd: ParcelFileDescriptor? = null
@@ -90,6 +100,11 @@ class SstpflashVpnService : VpnService() {
     private var lastFlushAt = 0L
 
     private var engineLinesConsumed = 0
+
+    // Ticks (1s each) the bundle has reported zero ready sessions; after
+    // TOTAL_FAILURE_TICKS the service tears the bundle down so the
+    // reconnect loop takes over (the bundle only redials its own slots).
+    private var bundleDownTicks = 0
 
     // ---- lifecycle -----------------------------------------------------
 
@@ -120,7 +135,7 @@ class SstpflashVpnService : VpnService() {
     override fun onDestroy() {
         active = false
         handler.removeCallbacksAndMessages(null)
-        runCatching { client?.close() }
+        runCatching { engine?.close() }
         closeTun()
         if (instance === this) instance = null
         super.onDestroy()
@@ -150,6 +165,7 @@ class SstpflashVpnService : VpnService() {
         lastSampleUp = 0; lastSampleDown = 0; lastSampleAt = System.currentTimeMillis()
         flushedUp = 0; flushedDown = 0; lastFlushAt = System.currentTimeMillis()
         engineLinesConsumed = 0
+        bundleDownTicks = 0
 
         VpnController.update {
             it.copy(
@@ -161,9 +177,16 @@ class SstpflashVpnService : VpnService() {
                 localIp = "", peerIp = "", dns = emptyList(), mtu = 0,
                 certSha256 = "", ipv6Negotiated = false,
                 reconnectAttempt = 0,
+                tunnels = p.tunnels.coerceIn(Profile.MIN_TUNNELS, Profile.MAX_TUNNELS),
+                proxyLabel = p.proxy.label(),
+                sessions = emptyList(),
             )
         }
-        appendLog("connecting to ${p.host}:${p.port} (${p.tlsModeLabel()})")
+        appendLog(
+            "connecting to ${p.host}:${p.port} (${p.tlsModeLabel()})" +
+                (if (p.tunnels > 1) " · ${p.tunnels} tunnels" else "") +
+                (if (p.proxy.enabled) " · via ${p.proxy.label()}" else ""),
+        )
 
         worker = Thread({ runLoop(p) }, "sstpflash-loop").apply {
             isDaemon = true
@@ -172,7 +195,7 @@ class SstpflashVpnService : VpnService() {
     }
 
     private fun handleDisconnect() {
-        if (!active && client == null) {
+        if (!active && engine == null) {
             stopEverything()
             return
         }
@@ -180,7 +203,7 @@ class SstpflashVpnService : VpnService() {
         active = false
         // Unblocks readIP and the TUN reader; the worker flushes usage,
         // closes both ends and stops the service.
-        runCatching { client?.close() }
+        runCatching { engine?.close() }
         closeTun()
         if (worker?.isAlive != true) stopEverything()
     }
@@ -188,15 +211,17 @@ class SstpflashVpnService : VpnService() {
     private fun stopEverything() {
         active = false
         handler.removeCallbacks(ticker)
-        runCatching { client?.close() }
+        runCatching { engine?.close() }
         closeTun()
         VpnController.update {
-            if (it.state == VpnController.State.ERROR) it
-            else it.copy(
+            if (it.state == VpnController.State.ERROR) {
+                it.copy(sessions = emptyList())
+            } else it.copy(
                 state = VpnController.State.DISCONNECTED,
                 message = "Idle",
                 authError = false,
                 upRate = 0, downRate = 0, reconnectAttempt = 0,
+                sessions = emptyList(),
             )
         }
         runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
@@ -215,20 +240,22 @@ class SstpflashVpnService : VpnService() {
                 setState(VpnController.State.CONNECTING, "Connecting to ${p.host}:${p.port}…")
                 VpnController.update { it.copy(reconnectAttempt = attempt) }
 
-                val c = buildClient(p)
-                client = c
+                val c = buildTunnel(p)
+                engine = c
                 engineLinesConsumed = 0
 
                 val connected = try {
                     c.connect(CONNECT_TIMEOUT_MS)
                     true
                 } catch (t: Throwable) {
-                    val msg = t.message?.trim().orEmpty().ifBlank { t.toString() }
+                    val msg = t.message?.trim().orEmpty().ifBlank {
+                        runCatching { c.lastError() }.getOrDefault("").ifBlank { t.toString() }
+                    }
                     val auth = runCatching { c.isAuthError() }.getOrDefault(false)
                     appendLog("connect failed: $msg")
                     pumpEngineLog(c)
                     runCatching { c.close() }
-                    client = null
+                    engine = null
                     if (auth) {
                         appendLog("stopping: authentication errors are not retried")
                         setState(
@@ -255,7 +282,7 @@ class SstpflashVpnService : VpnService() {
                 if (pfd == null) {
                     appendLog("could not establish the TUN device")
                     runCatching { c.close() }
-                    client = null
+                    engine = null
                     setState(VpnController.State.ERROR, "Could not establish the VPN interface")
                     break
                 }
@@ -266,6 +293,7 @@ class SstpflashVpnService : VpnService() {
                 lastSampleUp = 0; lastSampleDown = 0
                 lastSampleAt = System.currentTimeMillis()
                 flushedUp = 0; flushedDown = 0; lastFlushAt = System.currentTimeMillis()
+                bundleDownTicks = 0
                 UsageStore.recordSession(p.id)
                 AppModel.onUsageChanged()
 
@@ -278,6 +306,7 @@ class SstpflashVpnService : VpnService() {
                         dns = stats.dns, mtu = stats.mtu,
                         certSha256 = stats.cert, ipv6Negotiated = stats.ipv6,
                         reconnectAttempt = 0,
+                        sessions = parseSessions(runCatching { c.statsJSON() }.getOrDefault("") ?: ""),
                     )
                 }
                 appendLog("tunnel up: local ${stats.localIp} peer ${stats.peerIp} dns ${stats.dns} mtu ${stats.mtu}")
@@ -285,15 +314,15 @@ class SstpflashVpnService : VpnService() {
                 pumpEngineLog(c)
                 updateNotification("Connected · ${stats.localIp}")
 
-                bridge(c, pfd)
+                bridge(c, pfd, useBundle = p.tunnels > 1)
 
-                // Teardown: read final counters before the client goes away.
+                // Teardown: read final counters before the engine goes away.
                 val finalStats = parseStats(runCatching { c.statsJSON() }.getOrDefault("") ?: "")
                 flushUsage(p.id, finalStats, System.currentTimeMillis())
                 appendLog("tunnel down: ${finalStats.up} ↑ / ${finalStats.down} ↓ bytes")
                 closeTun()
                 runCatching { c.close() }
-                client = null
+                engine = null
 
                 if (!active) break
                 if (!p.autoReconnect.enabled) {
@@ -308,7 +337,7 @@ class SstpflashVpnService : VpnService() {
             appendLog("session loop failed: ${t.message}")
             setState(VpnController.State.ERROR, t.message ?: "Unexpected failure")
         } finally {
-            client?.let { c ->
+            engine?.let { c ->
                 flushUsage(p.id, parseStats(runCatching { c.statsJSON() }.getOrDefault("") ?: ""), System.currentTimeMillis())
             }
             active = false
@@ -329,7 +358,16 @@ class SstpflashVpnService : VpnService() {
         return active
     }
 
-    private fun buildClient(p: Profile): Client {
+    /**
+     * Builds the engine for one profile: tunnels <= 1 keeps the original
+     * single-session [Client]; tunnels > 1 switches to the multi-session
+     * [Bundle] (same protector, same TUN, same bridge loops — only the
+     * transport underneath is striped across sessions).
+     *
+     * The profile's upstream proxy goes to both constructors, which turn it
+     * into tunnel.ProxyConfig for the outer transport.
+     */
+    private fun buildTunnel(p: Profile): Tunnel {
         val ca = if (p.tlsMode == Profile.TLS_CUSTOM_CA && p.caPath.isNotBlank()) {
             runCatching { File(p.caPath).readBytes() }.getOrDefault(ByteArray(0))
         } else {
@@ -340,13 +378,68 @@ class SstpflashVpnService : VpnService() {
             Profile.TLS_CUSTOM_CA -> 2L
             else -> 1L
         }
+        val proxy = p.proxy
+        val protector = Protector { fd -> protect(fd.toInt()) }
+        if (p.tunnels > 1) {
+            val b = Mobile.newBundle(
+                p.host, p.port.toLong(), p.sni, p.username, p.password,
+                mode, ca, p.mtu.toLong(), KEEPALIVE_SEC.toLong(),
+                p.tunnels.coerceIn(Profile.MIN_TUNNELS, Profile.MAX_TUNNELS).toLong(),
+                proxy.type, proxy.host, proxy.port.toLong(), proxy.username, proxy.password,
+            )
+            // The fd bridge: every session socket escapes the TUN it carries.
+            b.setProtector(protector)
+            appendLog("bundle: ${p.tunnels} parallel sessions")
+            return BundleTunnel(b)
+        }
         val c = Mobile.newClient(
             p.host, p.port.toLong(), p.sni, p.username, p.password,
             mode, ca, p.mtu.toLong(), KEEPALIVE_SEC.toLong(),
+            proxy.type, proxy.host, proxy.port.toLong(), proxy.username, proxy.password,
         )
-        // The fd bridge: every engine socket is excluded from VPN routing.
-        c.setProtector(Protector { fd -> protect(fd.toInt()) })
-        return c
+        c.setProtector(protector)
+        return ClientTunnel(c)
+    }
+
+    // ---- engine abstraction -------------------------------------------
+
+    /**
+     * The slice of sstpflash.mobile.Client and sstpflash.mobile.Bundle the
+     * service drives. Both gomobile types expose the same surface, but they
+     * share no supertype, so one adapter per type keeps the loop, the
+     * bridge and the ticker single-path.
+     */
+    private interface Tunnel {
+        fun connect(timeoutMs: Long)
+        fun readIP(): ByteArray?
+        fun writeIP(pkt: ByteArray)
+        fun statsJSON(): String
+        fun isAuthError(): Boolean
+        fun lastError(): String
+        fun logTail(): String
+        fun close()
+    }
+
+    private class ClientTunnel(private val c: Client) : Tunnel {
+        override fun connect(timeoutMs: Long) = c.connect(timeoutMs)
+        override fun readIP(): ByteArray? = c.readIP()
+        override fun writeIP(pkt: ByteArray) = c.writeIP(pkt)
+        override fun statsJSON(): String = c.statsJSON()
+        override fun isAuthError(): Boolean = c.isAuthError()
+        override fun lastError(): String = c.lastError()
+        override fun logTail(): String = c.logTail()
+        override fun close() = c.close()
+    }
+
+    private class BundleTunnel(private val b: Bundle) : Tunnel {
+        override fun connect(timeoutMs: Long) = b.connect(timeoutMs)
+        override fun readIP(): ByteArray? = b.readIP()
+        override fun writeIP(pkt: ByteArray) = b.writeIP(pkt)
+        override fun statsJSON(): String = b.statsJSON()
+        override fun isAuthError(): Boolean = b.isAuthError()
+        override fun lastError(): String = b.lastError()
+        override fun logTail(): String = b.logTail()
+        override fun close() = b.close()
     }
 
     // ---- TUN -----------------------------------------------------------
@@ -383,6 +476,26 @@ class SstpflashVpnService : VpnService() {
             ipv6 = o.optBoolean("ipv6_negotiated", false),
             cert = o.optString("cert_sha256"),
         )
+    }
+
+    /** Parses the bundle's `sessions` array; empty on the Client path. */
+    private fun parseSessions(json: String): List<VpnController.SessionStat> {
+        val o = runCatching { JSONObject(json) }.getOrDefault(JSONObject())
+        val arr = o.optJSONArray("sessions") ?: return emptyList()
+        val out = ArrayList<VpnController.SessionStat>(arr.length())
+        for (i in 0 until arr.length()) {
+            val s = arr.optJSONObject(i) ?: continue
+            out.add(
+                VpnController.SessionStat(
+                    index = s.optInt("index", i),
+                    localIp = s.optString("local_ip"),
+                    up = s.optLong("up", 0),
+                    down = s.optLong("down", 0),
+                    ready = s.optBoolean("ready", false),
+                ),
+            )
+        }
+        return out
     }
 
     private fun establishTun(p: Profile, stats: Stats): ParcelFileDescriptor? {
@@ -437,7 +550,16 @@ class SstpflashVpnService : VpnService() {
 
     // ---- packet bridge -------------------------------------------------
 
-    private fun bridge(c: Client, pfd: ParcelFileDescriptor) {
+    /**
+     * Two packet loops between the TUN and the engine: [Tunnel.readIP] into
+     * TUN writes, TUN reads into [Tunnel.writeIP]. Identical for the Client
+     * and Bundle paths — the bundle stripes WriteIP across its sessions
+     * internally. With [useBundle] a rejected write means no session is
+     * left to carry the packet, which ends the session so the reconnect
+     * loop can take over (the single-session path keeps its original
+     * behaviour of relying on readIP to report closure).
+     */
+    private fun bridge(c: Tunnel, pfd: ParcelFileDescriptor, useBundle: Boolean) {
         tunPfd = pfd
         val input = FileInputStream(pfd.fileDescriptor)
         val output = FileOutputStream(pfd.fileDescriptor)
@@ -470,7 +592,16 @@ class SstpflashVpnService : VpnService() {
                     val n = input.read(buf)
                     if (n < 0) break
                     if (n == 0) continue
-                    c.writeIP(buf.copyOf(n))
+                    if (!useBundle) {
+                        c.writeIP(buf.copyOf(n))
+                        continue
+                    }
+                    try {
+                        c.writeIP(buf.copyOf(n))
+                    } catch (t: Throwable) {
+                        if (active) appendLog("no live tunnel session: ${t.message}")
+                        break
+                    }
                 }
             } catch (t: Throwable) {
                 if (active) appendLog("TUN read failed: ${t.message}")
@@ -519,10 +650,12 @@ class SstpflashVpnService : VpnService() {
 
     private val ticker = object : Runnable {
         override fun run() {
-            val c = client
+            val c = engine
             val p = profile
             if (active && c != null && p != null) {
-                val s = parseStats(runCatching { c.statsJSON() }.getOrDefault("") ?: "")
+                val raw = runCatching { c.statsJSON() }.getOrDefault("") ?: ""
+                val s = parseStats(raw)
+                val sessions = parseSessions(raw)
                 val now = System.currentTimeMillis()
                 val dt = (now - lastSampleAt).coerceAtLeast(1L)
                 if (s.up >= lastSampleUp) rateUp = (s.up - lastSampleUp) * 1000 / dt
@@ -538,9 +671,28 @@ class SstpflashVpnService : VpnService() {
                 if (connected) {
                     if (now - lastFlushAt >= USAGE_FLUSH_MS) flushUsage(p.id, s, now)
                     VpnController.update {
-                        it.copy(up = s.up, down = s.down, upRate = rateUp, downRate = rateDown)
+                        it.copy(
+                            up = s.up, down = s.down, upRate = rateUp, downRate = rateDown,
+                            sessions = sessions,
+                        )
                     }
                     updateNotification("↓ ${fmtRate(rateDown)}  ↑ ${fmtRate(rateUp)}")
+                }
+
+                // Service-level failure detection for the bundle: the engine
+                // redials its own slots, so only a bundle with no ready
+                // session at all needs the reconnect loop. Closing it unblocks
+                // readIP, the bridge ends and runLoop reconnects (or stops on
+                // auth error / auto_reconnect = off).
+                if (sessions.isNotEmpty() && sessions.none { it.ready }) {
+                    bundleDownTicks++
+                    if (bundleDownTicks >= TOTAL_FAILURE_TICKS) {
+                        bundleDownTicks = 0
+                        appendLog("all tunnel sessions are down — reconnecting")
+                        runCatching { c.close() }
+                    }
+                } else {
+                    bundleDownTicks = 0
                 }
             }
             if (active) handler.postDelayed(this, 1000L)
@@ -552,7 +704,7 @@ class SstpflashVpnService : VpnService() {
      * ones not yet forwarded are appended, so the UI sees one chronological
      * stream for the whole session.
      */
-    private fun pumpEngineLog(c: Client?) {
+    private fun pumpEngineLog(c: Tunnel?) {
         if (c == null) return
         val text = runCatching { c.logTail() }.getOrDefault("")
         if (text.isBlank()) return

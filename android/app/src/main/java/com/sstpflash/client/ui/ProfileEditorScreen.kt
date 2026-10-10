@@ -32,6 +32,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -52,11 +53,13 @@ import androidx.compose.ui.unit.dp
 import com.sstpflash.client.model.AppRules
 import com.sstpflash.client.model.AutoReconnect
 import com.sstpflash.client.model.Profile
+import com.sstpflash.client.model.ProxySettings
 import java.io.File
 import java.io.FileOutputStream
 
 private val TLS_MODES = listOf(Profile.TLS_VERIFY, Profile.TLS_INSECURE, Profile.TLS_CUSTOM_CA)
 private val TLS_LABELS = listOf("Verify", "Insecure", "Custom CA")
+private val PROXY_LABELS = listOf("None", "HTTP CONNECT", "SOCKS5")
 
 /** Editor for one profile; raw text states are folded into the model on save. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -78,6 +81,15 @@ fun ProfileEditorScreen(
     var packagesText by remember { mutableStateOf(initial.rules.packages.joinToString("\n")) }
     var caError by remember { mutableStateOf<String?>(null) }
 
+    // Upstream proxy: raw text states, folded into the model on save.
+    var proxyType by remember { mutableStateOf(initial.proxy.type) }
+    var proxyHost by remember { mutableStateOf(initial.proxy.host) }
+    var proxyPortText by remember { mutableStateOf(if (initial.proxy.port > 0) initial.proxy.port.toString() else "") }
+    var proxyUser by remember { mutableStateOf(initial.proxy.username) }
+    var proxyPass by remember { mutableStateOf(initial.proxy.password) }
+    var showProxyPassword by remember { mutableStateOf(false) }
+    var tunnels by remember { mutableStateOf(initial.tunnels.coerceIn(Profile.MIN_TUNNELS, Profile.MAX_TUNNELS)) }
+
     val context = LocalContext.current
     val filesDir = context.applicationContext.filesDir
 
@@ -98,6 +110,11 @@ fun ProfileEditorScreen(
         }
     }
 
+    val proxyChosen = proxyType == ProxySettings.TYPE_HTTP || proxyType == ProxySettings.TYPE_SOCKS5
+    val proxyPortValue = proxyPortText.trim().toIntOrNull()
+    val proxyPortOk = proxyPortValue != null && proxyPortValue in 1..65535
+    val proxyValid = !proxyChosen || (proxyHost.isNotBlank() && proxyPortOk)
+
     fun buildProfile(): Profile = draft.copy(
         port = portText.trim().toIntOrNull()?.coerceIn(1, 65535) ?: 443,
         mtu = mtuText.trim().toIntOrNull() ?: 0,
@@ -107,10 +124,18 @@ fun ProfileEditorScreen(
             initialBackoffMs = backoffInitial.trim().toLongOrNull()?.coerceIn(100, 600_000) ?: 1000L,
             maxBackoffMs = backoffMax.trim().toLongOrNull()?.coerceIn(100, 600_000) ?: 30_000L,
         ),
+        proxy = ProxySettings(
+            type = if (proxyChosen) proxyType else ProxySettings.TYPE_NONE,
+            host = proxyHost.trim(),
+            port = if (proxyChosen) proxyPortValue?.coerceIn(1, 65535) ?: 0 else 0,
+            username = proxyUser.trim(),
+            password = proxyPass,
+        ),
+        tunnels = tunnels.coerceIn(Profile.MIN_TUNNELS, Profile.MAX_TUNNELS),
         rules = AppRules(mode = ruleMode, packages = splitList(packagesText)),
     )
 
-    val canSave = draft.host.isNotBlank()
+    val canSave = draft.host.isNotBlank() && proxyValid
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -263,6 +288,112 @@ fun ProfileEditorScreen(
                     onValueChange = { mtuText = it.filter(Char::isDigit).take(4) },
                     keyboardType = KeyboardType.Number,
                     supportingText = "0 = default (1400), clamped 576–1500",
+                )
+            }
+
+            SectionCard("Upstream proxy") {
+                SectionLabel("Mode")
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    ProxySettings.TYPES.forEachIndexed { index, mode ->
+                        SegmentedButton(
+                            selected = proxyType == mode,
+                            onClick = { proxyType = mode },
+                            shape = SegmentedButtonDefaults.itemShape(index, ProxySettings.TYPES.size),
+                        ) {
+                            Text(PROXY_LABELS[index], maxLines = 1)
+                        }
+                    }
+                }
+
+                if (proxyChosen) {
+                    Spacer(Modifier.height(12.dp))
+                    LabeledField(
+                        label = "Proxy host",
+                        value = proxyHost,
+                        onValueChange = { proxyHost = it },
+                        placeholder = "proxy.example.com or 1.2.3.4",
+                        isError = proxyChosen && proxyHost.isBlank(),
+                        supportingText = if (proxyHost.isBlank()) "Required" else null,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        LabeledField(
+                            label = "Proxy port",
+                            value = proxyPortText,
+                            onValueChange = { proxyPortText = it.filter(Char::isDigit).take(5) },
+                            keyboardType = KeyboardType.Number,
+                            modifier = Modifier.weight(1f),
+                            isError = proxyChosen && !proxyPortOk,
+                            supportingText = if (proxyPortOk) null else "1–65535",
+                        )
+                        LabeledField(
+                            label = "Username (optional)",
+                            value = proxyUser,
+                            onValueChange = { proxyUser = it },
+                            placeholder = "proxy auth",
+                            modifier = Modifier.weight(2f),
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = proxyPass,
+                        onValueChange = { proxyPass = it },
+                        label = { Text("Password (optional)") },
+                        singleLine = true,
+                        visualTransformation = if (showProxyPassword) VisualTransformation.None
+                        else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { showProxyPassword = !showProxyPassword }) {
+                                Icon(
+                                    if (showProxyPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = if (showProxyPassword) "Hide password" else "Show password",
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "The outer TCP/TLS transport to the SSTP server goes through this proxy; tunnel credentials stay inside the session.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "Direct — the tunnel connects to the server without an intermediary.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            SectionCard("Tunnels") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Parallel sessions",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = tunnels.toString(),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                Slider(
+                    value = tunnels.toFloat(),
+                    onValueChange = { tunnels = it.toInt().coerceIn(Profile.MIN_TUNNELS, Profile.MAX_TUNNELS) },
+                    valueRange = Profile.MIN_TUNNELS.toFloat()..Profile.MAX_TUNNELS.toFloat(),
+                    steps = Profile.MAX_TUNNELS - Profile.MIN_TUNNELS - 1,
+                )
+                Text(
+                    text = "Parallel SSTP sessions for aggregate speed and resilience — a dropped session fails over without taking the tunnel down. 1 = single session.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 

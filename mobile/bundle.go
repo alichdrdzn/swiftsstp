@@ -23,6 +23,9 @@ type Bundle struct {
 	tlsMode               int
 	caPem                 []byte
 	mtu, kaSec, sessions  int
+	// proxy is the upstream proxy for the OUTER transport (nil = direct);
+	// every session of the bundle dials through it.
+	proxy *tunnel.ProxyConfig
 
 	mu      sync.Mutex
 	prot    Protector
@@ -37,7 +40,11 @@ type Bundle struct {
 
 // NewBundle creates a bundle controller. sessions is clamped to 1..8 by the
 // multi package. tlsMode: 0=verify 1=insecure 2=custom_ca.
-func NewBundle(host string, port int, sni, user, pass string, tlsMode int, caPem []byte, mtu int, keepaliveSec int, sessions int) *Bundle {
+//
+// proxyType ("", "http", "socks5"), proxyHost, proxyPort, proxyUser and
+// proxyPass configure the upstream proxy for the OUTER transport of every
+// session; a blank proxyType means sessions dial the server directly.
+func NewBundle(host string, port int, sni, user, pass string, tlsMode int, caPem []byte, mtu int, keepaliveSec int, sessions int, proxyType string, proxyHost string, proxyPort int, proxyUser string, proxyPass string) *Bundle {
 	if tlsMode < 0 || tlsMode > tlsModeLimit {
 		tlsMode = TLSVerify
 	}
@@ -49,6 +56,7 @@ func NewBundle(host string, port int, sni, user, pass string, tlsMode int, caPem
 		host: host, port: port, sni: sni, user: user, pass: pass,
 		tlsMode: tlsMode, caPem: ca, mtu: mtu, kaSec: keepaliveSec,
 		sessions: sessions, ring: newLogRing(),
+		proxy: newProxy(proxyType, proxyHost, proxyPort, proxyUser, proxyPass),
 	}
 }
 
@@ -117,7 +125,13 @@ func (b *Bundle) dialOne(ctx context.Context, logger *slog.Logger) (multi.Sessio
 		CACerts:  b.caPem,
 		MTU:      b.mtu,
 		Logger:   logger,
+		// DialConn carries the proxy hop as well when one is configured:
+		// tunnel.Dial prefers DialConn over Config.Proxy, and the socket
+		// handed to the proxy must be protected just like a direct one.
 		DialConn: func(network, addr string) (net.Conn, error) {
+			if b.proxy != nil {
+				return proxyDial(p, ctx, b.proxy, network, addr)
+			}
 			return protectDial(p, ctx, network, addr)
 		},
 	}

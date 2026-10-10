@@ -5,7 +5,12 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-/** Reads and writes `filesDir/profiles.json` in the shared schema shape. */
+/**
+ * Reads and writes `filesDir/profiles.json` in the shared schema shape.
+ * Serialization goes through [Profile.toJson]/[Profile.fromJson], so the
+ * `proxy` and `tunnels` fields are written with their canonical names and
+ * older files (without them) load with the documented defaults.
+ */
 object ProfileStore {
 
     fun load(dir: File): List<Profile> {
