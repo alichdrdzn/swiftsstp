@@ -3,6 +3,7 @@ package com.swiftsstp.client.vpn
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.VpnService
@@ -11,11 +12,13 @@ import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
 import com.swiftsstp.client.AppModel
+import com.swiftsstp.client.MainActivity
 import com.swiftsstp.client.R
 import com.swiftsstp.client.VpnController
 import com.swiftsstp.client.data.UsageStore
 import com.swiftsstp.client.model.AppRules
 import com.swiftsstp.client.model.Profile
+import com.swiftsstp.client.qs.SwiftSSTPTileService
 import org.json.JSONObject
 import swiftsstp.mobile.Bundle
 import swiftsstp.mobile.Client
@@ -225,6 +228,7 @@ class SwiftSSTPVpnService : VpnService() {
             )
         }
         runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
+        SwiftSSTPTileService.requestRefresh(this)
         stopSelf()
     }
 
@@ -313,6 +317,7 @@ class SwiftSSTPVpnService : VpnService() {
                 if (stats.cert.isNotBlank()) appendLog("server cert sha256 ${stats.cert}")
                 pumpEngineLog(c)
                 updateNotification("Connected · ${stats.localIp}")
+                SwiftSSTPTileService.requestRefresh(this)
 
                 bridge(c, pfd, useBundle = p.tunnels > 1)
 
@@ -717,6 +722,7 @@ class SwiftSSTPVpnService : VpnService() {
     private fun setState(state: VpnController.State, message: String, authError: Boolean = false) {
         VpnController.update { it.copy(state = state, message = message, authError = authError) }
         updateNotification(message)
+        SwiftSSTPTileService.requestRefresh(this)
     }
 
     private fun appendLog(msg: String) {
@@ -751,9 +757,27 @@ class SwiftSSTPVpnService : VpnService() {
             .setSmallIcon(R.drawable.ic_stat_vpn)
             .setContentTitle(getString(R.string.app_name))
             .setContentText(text)
+            // Tap-to-open: brings the app to the front. singleTask hands
+            // the intent to a running instance via onNewIntent. The
+            // dedicated request code keeps this PendingIntent distinct
+            // from the quick-settings tile's.
+            .setContentIntent(launchIntent())
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .build()
+    }
+
+    private fun launchIntent(): PendingIntent {
+        val intent = Intent(this, MainActivity::class.java)
+            .addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP,
+            )
+        return PendingIntent.getActivity(
+            this, NOTIF_ID, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
     }
 
     private fun startInForeground(text: String) {

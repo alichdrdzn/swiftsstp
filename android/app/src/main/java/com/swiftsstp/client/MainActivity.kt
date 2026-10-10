@@ -2,6 +2,7 @@ package com.swiftsstp.client
 
 import android.Manifest
 import android.app.Activity
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -37,12 +38,35 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AppModel.init(this)
+        consumeAutoConnect(intent)
         enableEdgeToEdge()
         setContent {
             SwiftSSTPTheme {
                 App()
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        consumeAutoConnect(intent)
+    }
+
+    /**
+     * The quick-settings tile asks for a connect by launching this
+     * activity with [EXTRA_AUTO_CONNECT]. The request becomes a bump on
+     * [AppModel.connectTick], which the connect flow in [App] consumes
+     * exactly once (a config change must not re-fire it).
+     */
+    private fun consumeAutoConnect(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_AUTO_CONNECT, false) != true) return
+        intent.removeExtra(EXTRA_AUTO_CONNECT)
+        AppModel.connectTick.value++
+    }
+
+    companion object {
+        const val EXTRA_AUTO_CONNECT = "auto_connect"
     }
 }
 
@@ -54,6 +78,7 @@ private fun App() {
     val selectedId by AppModel.selectedId.collectAsState()
     val vpn by VpnController.snapshot.collectAsState()
     val log by VpnController.log.collectAsState()
+    val connectTick by AppModel.connectTick.collectAsState()
 
     val context = LocalContext.current
 
@@ -91,6 +116,14 @@ private fun App() {
             ) == PackageManager.PERMISSION_GRANTED
             if (!granted) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
+    }
+
+    // External connect requests (quick-settings tile): consume the tick
+    // before acting so rotation or recomposition cannot repeat them.
+    LaunchedEffect(connectTick) {
+        if (connectTick == 0) return@LaunchedEffect
+        AppModel.connectTick.value = 0
+        AppModel.profile(AppModel.selectedId.value)?.let(connect)
     }
 
     // The bottom bar switches between the four root tabs; the system back

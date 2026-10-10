@@ -46,5 +46,25 @@
                 <action android:name="android.net.VpnService" />
             </intent-filter>
         </service>
+
+        <!--
+          Quick-settings tile: one-tap connect/disconnect from the
+          notification shade. ACTIVE_TILE means the system binds the
+          service only while the tile is visible (or being edited); the
+          tile re-renders from live state in onStartListening.
+        -->
+        <service
+            android:name=".qs.SwiftSSTPTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_stat_vpn"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="true" />
+        </service>
     </application>
 </manifest>

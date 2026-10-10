@@ -36,6 +36,14 @@ object AppModel {
     val usage = MutableStateFlow<Map<String, UsageEntry>>(emptyMap())
     val selectedId = MutableStateFlow<String?>(null)
 
+    /**
+     * One-shot "connect now" requests from outside the UI (the
+     * quick-settings tile). Bumped by MainActivity when an intent asks
+     * for it; consumed once by the Home screen's connect flow so a
+     * configuration change cannot re-fire it.
+     */
+    val connectTick = MutableStateFlow(0)
+
     @Volatile
     private var appDir: File? = null
 

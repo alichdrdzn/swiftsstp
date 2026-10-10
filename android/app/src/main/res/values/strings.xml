@@ -3,4 +3,8 @@
     <string name="app_name">SwiftSSTP</string>
     <string name="notification_channel_vpn">VPN session</string>
     <string name="notification_channel_vpn_desc">Live status and traffic for the active SwiftSSTP tunnel.</string>
+    <string name="tile_connected">Connected</string>
+    <string name="tile_connecting">Connecting…</string>
+    <string name="tile_disconnected">Disconnected</string>
+    <string name="tile_error">Error</string>
 </resources>
