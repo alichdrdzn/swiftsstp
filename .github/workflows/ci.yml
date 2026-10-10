@@ -98,8 +98,22 @@ jobs:
           # the ${{ env }} context, so export NDK_HOME from the shell instead.
           SDK="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
           export ANDROID_NDK_HOME="$SDK/ndk/27.2.12479018"
+          {
+            echo "go: $(go version)"; echo "javac: $(javac -version 2>&1)"
+            echo "JAVA_HOME=$JAVA_HOME"; echo "SDK=$SDK"
+            ls "$SDK/platforms"; df -h /
+          } 2>&1 | tee /tmp/aar-build.log
+          rc=0
           gomobile bind -target=android -androidapi 26 -javapkg swiftsstp \
-            -ldflags='-s -w' -trimpath -o android/app/libs/mobile.aar ./mobile
+            -ldflags='-s -w' -trimpath -o android/app/libs/mobile.aar ./mobile \
+            2>&1 | tee -a /tmp/aar-build.log || rc=$?
+          if [ "$rc" -ne 0 ]; then
+            # Job logs need auth to read; surface the failure via the
+            # PUBLIC annotations channel instead.
+            head -n 5 /tmp/aar-build.log | sed 's/^/::error title=aar-bind::/'
+            tail -n 8 /tmp/aar-build.log | sed 's/^/::error title=aar-bind::/'
+            exit 1
+          fi
       - uses: gradle/actions/setup-gradle@v4
       - name: assembleDebug
         working-directory: android
