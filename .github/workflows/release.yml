@@ -1,0 +1,144 @@
+# Release — push a tag like v1.2.0 and GitHub builds every binary,
+# signs the APK, and attaches the artifacts to a GitHub Release.
+#
+# Assets published per release:
+#   SwiftSSTP-<ver>-windows-amd64.exe   (Wails desktop client)
+#   SwiftSSTP-<ver>-android.apk         (release build, R8-shrunk)
+#   sstpcli-<ver>-linux-amd64           (reference CLI client)
+#   SHA256SUMS
+#
+# APK signing: optional. Add these repository secrets and the release APK
+# is signed with your real keystore (upgradeable installs); without them
+# it falls back to a debug signature (still installable, but each build
+# is a different "app" to Android):
+#   SIGNING_KEYSTORE_BASE64   (base64 of the .keystore file)
+#   SIGNING_KEYSTORE_PASSWORD
+#   SIGNING_KEY_ALIAS
+#   SIGNING_KEY_PASSWORD
+# Generate the keystore once with:
+#   keytool -genkeypair -keystore swiftsstp.keystore -alias swiftsstp \
+#     -keyalg RSA -keysize 4096 -validity 10950
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-windows:
+    name: Windows exe
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install Wails CLI (pinned)
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
+      - name: Build
+        working-directory: windows
+        run: wails build -platform windows/amd64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: windows/build/bin/swiftsstp.exe
+          if-no-files-found: error
+
+  build-android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install Android NDK (pinned)
+        run: sdkmanager "ndk;27.2.12479018" "platforms;android-35" "build-tools;35.0.0"
+      - name: Install gomobile + gobind (pinned to go.mod's x/mobile)
+        run: |
+          XM_VER=$(go list -m -f '{{.Version}}' golang.org/x/mobile)
+          go install golang.org/x/mobile/cmd/gomobile@$XM_VER
+          go install golang.org/x/mobile/cmd/gobind@$XM_VER
+      - name: Build engine AAR
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
+        run: |
+          gomobile bind -target=android -androidapi 26 -javapkg swiftsstp \
+            -ldflags='-s -w' -trimpath -o android/app/libs/mobile.aar ./mobile
+      - uses: gradle/actions/setup-gradle@v4
+      - name: assembleRelease
+        working-directory: android
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          SIGNING_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          VER=${GITHUB_REF_NAME#v}
+          VC=$(( $(date +%s) / 86400 ))
+          ./gradlew assembleRelease --console=plain -PversionName="$VER" -PversionCode="$VC"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+
+  build-cli:
+    name: Linux CLI
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build sstpcli
+        run: go build -trimpath -ldflags "-s -w" -o sstpcli ./cmd/sstpcli
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sstpcli
+          path: sstpcli
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    runs-on: ubuntu-latest
+    needs: [build-windows, build-android, build-cli]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Assemble asset names + checksums
+        run: |
+          VER=${GITHUB_REF_NAME#v}
+          mkdir -p out
+          mv dist/swiftsstp.exe "out/SwiftSSTP-${VER}-windows-amd64.exe"
+          mv dist/app-release.apk "out/SwiftSSTP-${VER}-android.apk"
+          mv dist/sstpcli "out/sstpcli-${VER}-linux-amd64"
+          cd out && sha256sum * > SHA256SUMS
+          ls -la
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER=${GITHUB_REF_NAME#v}
+          gh release create "$GITHUB_REF_NAME" out/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "SwiftSSTP ${VER}" \
+            --generate-notes
