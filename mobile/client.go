@@ -181,7 +181,14 @@ func (c *Client) dialConn(network, addr string) (net.Conn, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	return protectDial(p, ctx, network, addr)
+}
 
+// protectDial dials while protecting the socket fd via the Protector bridge
+// (VpnService.protect), both pre-connect via Dialer.Control and post-connect
+// through syscall.Conn. Shared by Client (single session) and Bundle
+// (multi-session).
+func protectDial(p Protector, ctx context.Context, network, addr string) (net.Conn, error) {
 	d := net.Dialer{}
 	// Protect as early as the kernel allows: a socket created and marked
 	// before connect() never races the VPN route.

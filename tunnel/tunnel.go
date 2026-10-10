@@ -86,6 +86,11 @@ type Config struct {
 	// unchanged. The conn must already be connected to Server:Port.
 	DialConn func(network, addr string) (net.Conn, error)
 
+	// Proxy routes the outer transport through an upstream HTTP CONNECT or
+	// SOCKS5 proxy (v2rayN-style outbound proxy). Ignored when DialConn is
+	// set (DialConn wins — it already owns connection establishment).
+	Proxy *ProxyConfig
+
 	Logger *slog.Logger
 }
 
@@ -231,7 +236,8 @@ func Dial(ctx context.Context, cfg Config) (*Session, Result, error) {
 	}
 
 	var tlsConn *tls.Conn
-	if cfg.DialConn != nil {
+	switch {
+	case cfg.DialConn != nil:
 		raw, err := cfg.DialConn("tcp", addr)
 		if err != nil {
 			return nil, zero, fmt.Errorf("tunnel: dial %s: %w", addr, err)
@@ -242,7 +248,18 @@ func Dial(ctx context.Context, cfg Config) (*Session, Result, error) {
 			return nil, zero, fmt.Errorf("tunnel: tls handshake: %w", err)
 		}
 		tlsConn = tc
-	} else {
+	case cfg.Proxy != nil:
+		raw, err := cfg.Proxy.proxyDial(ctx, addr)
+		if err != nil {
+			return nil, zero, err
+		}
+		tc := tls.Client(raw, tlsCfg)
+		if err := tc.HandshakeContext(ctx); err != nil {
+			_ = raw.Close()
+			return nil, zero, fmt.Errorf("tunnel: tls handshake via proxy: %w", err)
+		}
+		tlsConn = tc
+	default:
 		d := tls.Dialer{Config: tlsCfg}
 		conn, err := d.DialContext(ctx, "tcp", addr)
 		if err != nil {

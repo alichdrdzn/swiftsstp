@@ -27,6 +27,14 @@ shape. Field names are canonical; apps may add app-specific extras under
         "initial_backoff_ms": 1000,
         "max_backoff_ms": 30000
       },
+      "proxy": {
+        "type": "",
+        "host": "",
+        "port": 0,
+        "username": "",
+        "password": ""
+      },
+      "tunnels": 1,
       "extras": {}
     }
   ]
@@ -37,6 +45,12 @@ shape. Field names are canonical; apps may add app-specific extras under
 - `ca_path`: file path of a PEM bundle; only meaningful for custom_ca
 - `mtu`: 0 = engine default (1400); otherwise clamped 576..1500
 - `dns_override`: list of IP strings; empty = use server-provided DNS
+- `proxy`: upstream proxy for the OUTER transport (v2rayN-style outbound
+  proxy). `type`: "" (direct) | "http" (CONNECT) | "socks5". Credentials
+  optional. When set, every session of this profile connects through it.
+- `tunnels`: number of parallel SSTP sessions to bundle (1..8). 1 = single
+  session. Higher values spread concurrent flows across sessions for
+  aggregate throughput and per-session failover.
 - `extras.allowed_apps` (Android): package names for per-app tunneling;
   empty = whole device
 - File location:
