@@ -7,7 +7,10 @@ windows/build/bin/
 *.exe
 *.apk
 
-# gomobile artifacts are rebuilt by CI (see .github/workflows/ci.yml):
+# gomobile artifacts are rebuilt by CI (see .github/workflows/ci.yml).
+# gomobile bind does NOT create the output dir, so the mkdir is required
+# on a fresh clone:
+#   mkdir -p android/app/libs
 #   gomobile bind -javapkg swiftsstp -o android/app/libs/mobile.aar ./mobile
 *.aar
 android/app/libs/mobile-sources.jar
