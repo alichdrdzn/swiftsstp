@@ -94,6 +94,7 @@ jobs:
           go install golang.org/x/mobile/cmd/gobind@$XM_VER
       - name: Build engine AAR
         run: |
+          set -o pipefail
           # ANDROID_HOME is a machine-level variable: it is NOT available in
           # the ${{ env }} context, so export NDK_HOME from the shell instead.
           SDK="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
@@ -117,7 +118,17 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: assembleDebug
         working-directory: android
-        run: ./gradlew assembleDebug --console=plain
+        run: |
+          set -o pipefail
+          rc=0
+          ./gradlew assembleDebug --console=plain 2>&1 | tee /tmp/gradle.log || rc=$?
+          if [ "$rc" -ne 0 ]; then
+            # Job logs are auth-gated; surface the failure publicly.
+            grep -E "What went wrong|Caused by|FAILURE:|error:|e: |Execution failed" -A2 /tmp/gradle.log \
+              | head -n 12 | sed 's/^/::error title=gradle::/'
+            tail -n 8 /tmp/gradle.log | sed 's/^/::error title=gradle::/'
+            exit 1
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: swiftsstp-debug-apk
