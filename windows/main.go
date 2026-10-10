@@ -1,7 +1,7 @@
 // Command main is the SwiftSSTP Windows client: a Wails v2 desktop
 // app (Go backend, buildless vanilla-JS frontend) around the SwiftSSTP
-// SSTP engine, with whole-device tunnel mode (Wintun) and v2rayN-style
-// local proxy mode (gVisor netstack + SOCKS5/HTTP inbounds).
+// SSTP engine, with whole-device tunnel mode (Wintun) and local proxy
+// mode (gVisor netstack + SOCKS5/HTTP inbounds).
 package main
 
 import (

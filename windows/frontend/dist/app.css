@@ -129,7 +129,7 @@ main { padding: 22px; max-width: 1280px; width: 100%; margin: 0 auto; flex: 1; }
 .muted { color: var(--muted); font-weight: 500; }
 .mono { font-family: "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace; }
 
-/* ---- home (WARP-style: selector → orb → state → mode → IP) ---- */
+/* ---- home (selector → orb → state → mode → IP) ---- */
 .home-stack {
   display: flex;
   flex-direction: column;

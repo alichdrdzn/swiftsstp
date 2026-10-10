@@ -61,7 +61,7 @@ import com.swiftsstp.client.net.IpGeo
 import kotlinx.coroutines.delay
 
 /**
- * Home tab — the WARP connect screen: a profile pill, the one big circular
+ * Home tab — the connect screen: a profile pill, the one big circular
  * connect button, the state line under it, and the egress-IP card. No stat
  * cards live here; they moved to the Stats tab.
  *
@@ -147,7 +147,7 @@ fun HomeScreen(
 
 /**
  * Profile selector pill — the slim "which server?" control at the top of the
- * WARP home screen; tapping it opens the profile list.
+ * home screen; tapping it opens the profile list.
  */
 @Composable
 private fun ProfileSelectorPill(
@@ -194,7 +194,7 @@ private fun ProfileSelectorPill(
 }
 
 /**
- * The big circular connect button — WARP's power circle: a dark disc with a
+ * The big circular connect button — a power disc with a
  * hairline ring at rest, mint and glowing while connected, amber and breathing
  * while the tunnel is coming up, rose on error.
  */
@@ -328,7 +328,7 @@ private fun StateText(state: VpnController.State, vpn: VpnController.Snapshot, p
 }
 
 /**
- * Egress IP card — the WARP "your IP" row: a slim rounded card with the
+ * Egress IP card — a slim rounded card with the
  * address in monospace behind its country's flag. Tapping copies the address.
  */
 @Composable

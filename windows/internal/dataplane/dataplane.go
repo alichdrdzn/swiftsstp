@@ -11,7 +11,7 @@ import (
 	"swiftsstp/tunnel"
 )
 
-// Listener defaults for proxy mode (v2rayN-style local inbounds).
+// Listener defaults for proxy mode (local inbounds).
 const (
 	DefaultSocksPort = 10808
 	DefaultHTTPPort  = 10809

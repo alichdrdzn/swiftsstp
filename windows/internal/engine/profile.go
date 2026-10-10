@@ -52,7 +52,7 @@ func (a AutoReconnect) max() time.Duration {
 }
 
 // Proxy is the upstream proxy for the OUTER transport (docs/PROFILE_SCHEMA.md
-// "proxy", v2rayN-style outbound): the TCP connection the TLS+SSTP carrier
+// "proxy", outbound proxy): the TCP connection the TLS+SSTP carrier
 // rides on goes through it, so every session of the profile dials the server
 // through HTTP CONNECT or SOCKS5. Type "" means direct.
 type Proxy struct {

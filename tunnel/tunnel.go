@@ -41,7 +41,7 @@ const (
 	// TLSVerify performs standard chain + hostname verification (default).
 	TLSVerify TLSMode = iota
 	// TLSInsecure accepts any certificate — self-signed servers, no CA
-	// management. Equivalent to v2rayN's "allow insecure".
+	// management; suitable for servers with self-signed certificates.
 	TLSInsecure
 	// TLSCustomCA verifies against exactly the PEM certificates in
 	// Config.CACerts (a pinned private CA), ignoring the system store.
@@ -87,7 +87,7 @@ type Config struct {
 	DialConn func(network, addr string) (net.Conn, error)
 
 	// Proxy routes the outer transport through an upstream HTTP CONNECT or
-	// SOCKS5 proxy (v2rayN-style outbound proxy). Ignored when DialConn is
+	// SOCKS5 proxy. Ignored when DialConn is
 	// set (DialConn wins — it already owns connection establishment).
 	Proxy *ProxyConfig
 

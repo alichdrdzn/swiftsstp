@@ -45,8 +45,8 @@ shape. Field names are canonical; apps may add app-specific extras under
 - `ca_path`: file path of a PEM bundle; only meaningful for custom_ca
 - `mtu`: 0 = engine default (1400); otherwise clamped 576..1500
 - `dns_override`: list of IP strings; empty = use server-provided DNS
-- `proxy`: upstream proxy for the OUTER transport (v2rayN-style outbound
-  proxy). `type`: "" (direct) | "http" (CONNECT) | "socks5". Credentials
+- `proxy`: upstream proxy for the OUTER transport (the proxy used to
+  reach the SSTP server). `type`: "" (direct) | "http" (CONNECT) | "socks5". Credentials
   optional. When set, every session of this profile connects through it.
 - `tunnels`: number of parallel SSTP sessions to bundle (1..8). 1 = single
   session. Higher values spread concurrent flows across sessions for

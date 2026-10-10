@@ -24,6 +24,7 @@ local.properties
 
 # Vendored toolchains / editor droppings
 .vendor/
+.kotlin/
 .DS_Store
 .idea/
 .vscode/

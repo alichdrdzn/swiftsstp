@@ -1,4 +1,4 @@
-// Package proxy is the v2rayN-style local proxy data plane: a gVisor
+// Package proxy is the local proxy data plane: a gVisor
 // netstack fed by the SSTP session plus SOCKS5 and HTTP listeners on
 // 127.0.0.1. It is OS-neutral Go so the whole path (local client -> listener
 // -> netstack -> tunnel -> server egress) can be live-tested on Linux.

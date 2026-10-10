@@ -14,7 +14,7 @@ import (
 )
 
 // ProxyConfig routes the OUTER transport (the TCP connection the SSTP/TLS
-// carrier rides on) through an upstream proxy, like v2rayN's outbound proxy.
+// carrier rides on) through an upstream HTTP CONNECT or SOCKS5 proxy.
 // Everything after the proxy handshake is the normal TLS+SSTP stream; the
 // proxy only sees the target host:port, never tunnel credentials (those live
 // inside MS-CHAPv2) or any payload.

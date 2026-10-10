@@ -1,83 +1,101 @@
 # SwiftSSTP
 
-An open-source SSTP (Secure Socket Tunneling Protocol) VPN client for Android
-and Windows, built around one portable Go engine.
+An open-source SSTP (Secure Socket Tunneling Protocol) VPN client for
+Android and Windows, built around a single portable Go engine.
 
 <a href="docs/logo/swiftsstp-icon.svg"><img src="docs/logo/swiftsstp-icon-512.png" width="96" alt="SwiftSSTP logo"></a>
 
-## Features
+## Overview
 
-- **Two modes**: whole-device tunneling (VpnService on Android, Wintun on
-  Windows), or a v2rayN-style local proxy (SOCKS5 + HTTP) for apps that
-  support proxies (Windows).
-- **No certificate requirements**: connect to self-signed servers
-  ("insecure" mode), pin a private CA, or verify normally — your choice
-  per profile.
-- **Everything is a profile setting**: MTU, DNS override, TLS SNI, custom
-  port, IPv4/IPv6, auto-reconnect with backoff, upstream proxy
-  (HTTP CONNECT / SOCKS5), parallel tunnels (1–8 sessions), per-app
-  tunneling (Android).
-- **Warp-style UI on both platforms**: Home tab with a single connect
-  button and your public IP + country flag, plus Profiles / Stats / Log
-  tabs.
-- **Usage accounting**: live session up/down/rate plus persisted lifetime
-  totals per server.
+SwiftSSTP establishes SSTP tunnels — PPP over HTTP over TLS — without
+depending on any platform's built-in client, so connection behavior is
+consistent across both supported operating systems and every protocol
+option is available per profile.
+
+## Capabilities
+
+- **Tunnel modes**: route all device traffic through the server, or expose
+  the tunnel as local SOCKS5 and HTTP proxy endpoints for applications
+  that support proxy configuration (Windows).
+- **Certificate handling**: validate against the system trust store, pin a
+  private CA bundle, or accept self-signed server certificates — selected
+  per profile. Inner PPP authentication (MS-CHAPv2) mutually
+  authenticates the peers regardless of the TLS verification mode.
+- **Per-profile configuration**: server host and port, TLS SNI override,
+  MTU, DNS override, IPv4/IPv6, auto-reconnect with exponential backoff,
+  upstream proxy (HTTP CONNECT or SOCKS5, with optional credentials), and
+  1–8 parallel sessions with independent failover.
+- **Per-application tunneling** (Android): restrict the VPN to a listed
+  set of applications or exclude a listed set.
+- **Traffic accounting**: live session transfer rates and persistent
+  lifetime totals for every profile.
+- **Diagnostics**: connection log, negotiated endpoint details, and the
+  server certificate's SHA-256 fingerprint for out-of-band verification.
+- **Interface**: dark theme with a tabbed layout on both platforms —
+  connection control and the current public address on the home tab,
+  with profiles, statistics, and logs each in their own tab.
 
 ## Download
 
-Grab the latest release for your platform from the
+Binaries for each release are published on the
 [Releases page](../../releases):
 
-| Asset | For |
-|-------|-----|
-| `SwiftSSTP-<ver>-android.apk` | Android (arm64 + armeabi-v7a, minSdk 26) |
-| `SwiftSSTP-<ver>-windows-amd64.exe` | Windows 10/11 x64 |
-| `sstpcli-<ver>-linux-amd64` | Reference CLI client (Linux TUN) |
+| Asset | Platform |
+|-------|----------|
+| `SwiftSSTP-<version>-android.apk` | Android 8.0+ (arm64-v8a, armeabi-v7a) |
+| `SwiftSSTP-<version>-windows-amd64.exe` | Windows 10/11 x64 |
+| `sstpcli-<version>-linux-amd64` | Linux command-line client |
 
-Every release ships a `SHA256SUMS` file — verify what you download.
-
-> Android: installs directly (signed). If you previously installed a
-> debug-signed build, uninstall it first — the signatures differ.
+Each release includes a `SHA256SUMS` file; verify downloaded assets
+against it. The Android package installs directly. If an earlier build
+was installed with a different signature, uninstall it before
+installing the release build.
 
 ## Building from source
 
-Prerequisites: Go 1.27+, and for the apps additionally JDK 17+, Android
-SDK + NDK 27, and the [Wails v2 CLI](https://wails.io) (v2.16.0).
+Prerequisites: Go 1.27 or newer. Building the applications additionally
+requires JDK 17, the Android SDK with NDK 27 (Android), and the
+[Wails v2 CLI](https://wails.io) v2.16.0 (Windows).
 
 ```sh
-# Engine + CLI
+# Engine and command-line client
 go build ./...
 go build ./cmd/sstpcli
 
-# Windows client (cross-compiles fine from Linux/macOS)
+# Windows client (cross-compiles from Linux and macOS)
 cd windows && wails build -platform windows/amd64
 
-# Android — step 1: bind the Go engine (NOT committed; rebuilt locally/CI)
+# Android — bind the Go engine (not committed; rebuilt on each machine)
 ANDROID_HOME=/path/to/sdk gomobile bind -target=android -androidapi 26 \
   -javapkg swiftsstp -ldflags='-s -w' -trimpath \
   -o android/app/libs/mobile.aar ./mobile
 
-# Android — step 2: build the app
+# Android — build the application
 cd android && ./gradlew assembleDebug      # or assembleRelease
 ```
 
-CI runs the same steps on every push (`.github/workflows/ci.yml`); pushing
-a tag like `v1.2.0` builds all binaries and publishes a GitHub Release
-(`.github/workflows/release.yml`).
+Continuous integration (`.github/workflows/ci.yml`) runs the test suites
+and builds every target on each push. Pushing a version tag such as
+`v1.2.0` triggers the release workflow
+(`.github/workflows/release.yml`), which builds all binaries, signs the
+Android package, and publishes a GitHub Release.
 
-### Release signing (optional)
+### Release signing
 
-Without secrets, the release APK is signed with a debug key — installable,
-but updates from a differently-signed build require an uninstall first.
-For stable upgrade-in-place APKs, add these repository secrets:
+Without configuration, release APKs are signed with a debug key: the
+package installs normally, but installing a later build with a different
+signature requires uninstalling first. For consistent signatures across
+releases, generate a keystore and add these repository secrets:
 
 ```sh
-base64 -w0 swiftsstp.keystore > keystore.b64   # then paste as the secret
+keytool -genkeypair -keystore swiftsstp.keystore -alias swiftsstp \
+  -keyalg RSA -keysize 4096 -validity 10950
+base64 -w0 swiftsstp.keystore    # value for SIGNING_KEYSTORE_BASE64
 ```
 
 | Secret | Value |
 |--------|-------|
-| `SIGNING_KEYSTORE_BASE64` | contents of `keystore.b64` |
+| `SIGNING_KEYSTORE_BASE64` | output of `base64 -w0` on the keystore |
 | `SIGNING_KEYSTORE_PASSWORD` | keystore password |
 | `SIGNING_KEY_ALIAS` | key alias |
 | `SIGNING_KEY_PASSWORD` | key password |
@@ -90,7 +108,7 @@ base64 -w0 swiftsstp.keystore > keystore.b64   # then paste as the secret
 | `internal/` | Vendored protocol stack (PPP, MS-CHAPv2/MPPE, SSTP wire, crypto binding), derived from the MIT-licensed veepin project — see `NOTICE` |
 | `mobile/` | gomobile wrapper exposing the engine to the Android app |
 | `android/` | Kotlin + Jetpack Compose app (VpnService, per-app rules, Material 3 dark UI) |
-| `windows/` | Wails desktop app (Wintun full-tunnel + gVisor netstack proxy mode, buildless vanilla-JS frontend) |
+| `windows/` | Wails desktop app (Wintun full-tunnel + gVisor netstack proxy mode, vanilla-JS frontend embedded via go:embed) |
 | `reconnect/` | Auto-reconnect manager with exponential backoff |
 | `usage/` | Persistent per-profile traffic counters |
 | `cmd/sstpcli/` | Reference CLI client (Linux TUN backend) — the interop test bed |
@@ -98,15 +116,17 @@ base64 -w0 swiftsstp.keystore > keystore.b64   # then paste as the secret
 
 ## Interop status
 
-Verified live against a SoftEther VPN Server (MS-SSTP listener): MS-CHAPv2
-authentication, SHA-256 crypto binding, IPCP addressing/DNS, and real
-traffic egress (curl through the tunnel shows the server's public IP).
+Verified against a SoftEther VPN Server (MS-SSTP listener): MS-CHAPv2
+authentication, SHA-256 crypto binding, IPCP addressing and DNS
+negotiation, and live traffic through the tunnel (an HTTP request through
+the tunnel egresses via the server's public address).
 
 ## Contributing
 
-Issues and pull requests are welcome. Run `go test ./...`, the `windows/`
-module tests, and both app builds before sending a PR — CI will check them
-for you.
+Bug reports, feature requests, and pull requests are welcome. Before
+submitting a pull request, run `go test ./...`, the `windows/` module
+tests, and both application builds; continuous integration repeats these
+checks.
 
 ## License
 

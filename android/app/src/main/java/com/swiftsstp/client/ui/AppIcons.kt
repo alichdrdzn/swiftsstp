@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.dp
 object AppIcons {
 
     /**
-     * Power symbol — the WARP connect button glyph: a broken ring with a
+     * Power symbol — the connect button glyph: a broken ring with a
      * vertical stem. Stroked, round-capped, tinted by the caller.
      */
     val Power: ImageVector by lazy { icon("Power") { power() } }

@@ -1,6 +1,6 @@
 // Command proxytest boots the engine + proxy data plane against a real SSTP
 // server on ANY OS (it deliberately avoids Windows-only packages) so the
-// v2rayN-style local proxy path can be live-verified before cross-compiling
+// local proxy path can be live-verified before cross-compiling
 // the Windows client:
 //
 //	go run ./cmd/proxytest -server 18.130.233.223 -user mohsen -pass mohsen123 -insecure

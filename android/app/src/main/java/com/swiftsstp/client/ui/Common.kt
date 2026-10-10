@@ -84,14 +84,14 @@ val PrimaryGradient = Brush.horizontalGradient(listOf(AccentBlue, AccentViolet))
 /** Red action gradient — mirrors Windows `.btn-primary.disconnect`. */
 val DisconnectGradient = Brush.horizontalGradient(listOf(Color(0xFFFF5F6D), Color(0xFFFF2D55)))
 
-/** Which bottom-bar tab is on screen; mirrors the WARP `.nav` quartet. */
+/** Which bottom-bar tab is on screen; the four root tabs of the app. */
 enum class NavTab { HOME, PROFILES, STATS, LOG }
 
 /** Style of the one big action button. */
 enum class ButtonVariant { PRIMARY, DISCONNECT }
 
 /**
- * Slim shared top bar — mirrors the WARP header: brand mark, "SwiftSSTP"
+ * Slim shared top bar — brand mark, "SwiftSSTP"
  * wordmark with the "SSTP client" caption, and the status `.pill` on the
  * right. Navigation moved to the bottom bar, so this is one row only.
  */
@@ -142,7 +142,7 @@ fun SwiftSSTPTopBar(
 }
 
 /**
- * Bottom navigation — mirrors the WARP app's tab bar: icon + label per tab,
+ * Bottom navigation — icon + label per tab,
  * the active one tinted with the accent blue on a faint accent pill.
  */
 @Composable

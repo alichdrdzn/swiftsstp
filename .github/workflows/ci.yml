@@ -76,7 +76,10 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - name: Install Android NDK (pinned to the version this repo builds with)
+      # Puts sdkmanager on PATH and accepts the SDK licenses; the runner's
+      # preinstalled SDK does not expose the command-line tools by itself.
+      - uses: android-actions/setup-android@v3
+      - name: Install Android packages (NDK, platform, build-tools)
         run: sdkmanager "ndk;27.2.12479018" "platforms;android-35" "build-tools;35.0.0"
       - name: Install gomobile + gobind (pinned to go.mod's x/mobile)
         run: |
@@ -84,9 +87,11 @@ jobs:
           go install golang.org/x/mobile/cmd/gomobile@$XM_VER
           go install golang.org/x/mobile/cmd/gobind@$XM_VER
       - name: Build engine AAR
-        env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
         run: |
+          # ANDROID_HOME is a machine-level variable: it is NOT available in
+          # the ${{ env }} context, so export NDK_HOME from the shell instead.
+          SDK="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          export ANDROID_NDK_HOME="$SDK/ndk/27.2.12479018"
           gomobile bind -target=android -androidapi 26 -javapkg swiftsstp \
             -ldflags='-s -w' -trimpath -o android/app/libs/mobile.aar ./mobile
       - uses: gradle/actions/setup-gradle@v4
