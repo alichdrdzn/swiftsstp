@@ -26,9 +26,9 @@ import (
 	"syscall"
 	"time"
 
-	"sstpflash/usage"
-	"sstpflash/windows/internal/engine"
-	"sstpflash/windows/internal/proxy"
+	"swiftsstp/usage"
+	"swiftsstp/windows/internal/engine"
+	"swiftsstp/windows/internal/proxy"
 )
 
 func main() {
@@ -47,7 +47,7 @@ func main() {
 	flag.Parse()
 	log.SetFlags(log.Ltime | log.Lmicroseconds)
 
-	// Exercises sstpflash/usage write-through persistence in cwd.
+	// Exercises swiftsstp/usage write-through persistence in cwd.
 	u, _ := usage.Open("usage-stats.json")
 
 	pxy := proxy.New(proxy.Config{

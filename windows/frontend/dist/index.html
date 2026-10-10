@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SwiftSSTP</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark"><img src="brand.svg" alt=""></span>
+        <span class="brand-name">SwiftSSTP</span>
+        <span class="brand-sub">SSTP client</span>
+      </div>
+      <nav class="nav">
+        <a href="#/" id="nav-home" class="nav-link">Home</a>
+        <a href="#/profiles" id="nav-profiles" class="nav-link">Profiles</a>
+        <a href="#/stats" id="nav-stats" class="nav-link">Stats</a>
+        <a href="#/log" id="nav-log" class="nav-link">Log</a>
+      </nav>
+      <div class="topbar-right">
+        <span class="pill" id="status-pill" data-state="disconnected">disconnected</span>
+      </div>
+    </header>
+
+    <main>
+      <!-- ================= HOME (WARP-style: selector + orb + mode + IP) ============ -->
+      <section id="view-home" class="view">
+        <div class="home-stack">
+          <!-- 1. profile selector -->
+          <div class="home-profile">
+            <label class="field-label" for="conn-profile">Profile</label>
+            <select id="conn-profile" class="input select profile-pill"></select>
+          </div>
+
+          <!-- 2. big circular connect control — the ONLY connect button -->
+          <button id="btn-connect" class="connect-orb" type="button" data-state="disconnected"
+                  aria-label="Connect" title="Connect">
+            <svg class="orb-icon" viewBox="0 0 24 24" width="64" height="64" fill="none"
+                 stroke="currentColor" stroke-width="2.1" stroke-linecap="round" aria-hidden="true">
+              <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+              <path d="M12 2v10"></path>
+            </svg>
+          </button>
+
+          <!-- 3. state text under the circle -->
+          <div class="home-state">
+            <div class="state-big" id="state-big">Idle</div>
+            <div class="state-sub" id="state-sub">pick a profile and press connect</div>
+          </div>
+
+          <!-- 4. compact mode row -->
+          <div class="segmented" id="mode-toggle" role="tablist" aria-label="Tunnel mode">
+            <button class="seg" data-mode="proxy" type="button">Local proxy</button>
+            <button class="seg" data-mode="tunnel" type="button">Whole-device</button>
+            <span class="seg-thumb" aria-hidden="true"></span>
+          </div>
+
+          <!-- 5. egress IP card (tap to copy) -->
+          <div class="card ip-card" id="ip-card" role="button" tabindex="0"
+               title="Copy IP address" aria-label="Copy IP address">
+            <div class="ip-label" id="ip-label">IP address</div>
+            <div class="ip-row">
+              <span class="ip-flag hidden" id="ip-flag"></span>
+              <span class="ip-value mono" id="ip-value">—</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= STATS ================= -->
+      <section id="view-stats" class="view hidden">
+        <div class="grid">
+          <div class="card stat-card">
+            <h3>Session</h3>
+            <div class="stat-row"><span>Uploaded</span><b id="s-up">—</b></div>
+            <div class="stat-row"><span>Download</span><b id="s-down">—</b></div>
+            <div class="stat-row"><span>Rate up</span><b id="s-rate-up">—</b></div>
+            <div class="stat-row"><span>Rate down</span><b id="s-rate-down">—</b></div>
+            <div class="stat-row"><span>Since</span><b id="s-since">—</b></div>
+          </div>
+
+          <div class="card stat-card" id="tunnels-card">
+            <h3>Tunnels <span class="muted" id="t-tunnels">—</span></h3>
+            <div class="stat-row"><span>Upstream proxy</span><b class="mono" id="t-proxy">direct</b></div>
+            <div class="stat-row"><span>Sessions ready</span><b id="t-ready">—</b></div>
+            <div class="session-chips" id="session-chips"></div>
+            <div class="muted" style="margin-top:10px;font-size:12px;line-height:1.5">
+              One chip per SSTP session: index, inner IP, bytes and readiness.
+              Dead sessions redial in the background while the rest carry traffic.
+            </div>
+          </div>
+
+          <div class="card stat-card">
+            <h3>Lifetime <span class="muted" id="s-profile-name"></span></h3>
+            <div class="stat-row"><span>Total up</span><b id="s-total-up">—</b></div>
+            <div class="stat-row"><span>Total down</span><b id="s-total-down">—</b></div>
+            <div class="stat-row"><span>Sessions</span><b id="s-sessions">—</b></div>
+            <div class="stat-row"><span>Reconnects</span><b id="s-attempts">—</b></div>
+          </div>
+
+          <div class="card stat-card">
+            <h3>Endpoint</h3>
+            <div class="stat-row"><span>Local</span><b id="s-local">—</b></div>
+            <div class="stat-row"><span>Peer</span><b id="s-peer">—</b></div>
+            <div class="stat-row"><span>MTU</span><b id="s-mtu">—</b></div>
+            <div class="stat-row"><span>DNS</span><b id="s-dns" class="mono">—</b></div>
+          </div>
+
+          <div class="card stat-card">
+            <h3>Server certificate</h3>
+            <div class="cert-label">SHA-256 fingerprint</div>
+            <div class="cert-fp mono" id="s-cert">—</div>
+            <div class="btn-row">
+              <button class="btn-ghost" id="btn-copy-cert" type="button">Copy</button>
+            </div>
+            <div class="cert-label" style="margin-top:10px">Last error</div>
+            <div class="cert-fp mono" id="s-error">—</div>
+          </div>
+
+          <div class="card stat-card proxy-card" id="proxy-card">
+            <h3>Local proxy endpoints</h3>
+            <div class="stat-row"><span>SOCKS5</span><b class="mono" id="p-socks">127.0.0.1:10808</b></div>
+            <div class="stat-row"><span>HTTP</span><b class="mono" id="p-http">127.0.0.1:10809</b></div>
+            <div class="stat-row"><span>System proxy</span><b id="p-sysproxy">off</b></div>
+            <div class="muted" style="margin-top:8px;font-size:12px">
+              Point your apps at these while proxy mode is connected.
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ================= LOG ================= -->
+      <section id="view-log" class="view hidden">
+        <div class="grid">
+          <div class="card log-card">
+            <h3>Log <button class="btn-ghost small" id="btn-clear-log" type="button">clear</button></h3>
+            <div class="log" id="log"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= PROFILES ================= -->
+      <section id="view-profiles" class="view hidden">
+        <div class="list-head">
+          <h2>Profiles</h2>
+          <button class="btn-primary" id="btn-new-profile" type="button">+ New profile</button>
+        </div>
+        <div class="profile-grid" id="profile-grid"></div>
+        <div class="empty hidden" id="profile-empty">
+          No profiles yet — create one to get started.
+        </div>
+      </section>
+
+      <!-- ================= PROFILE EDITOR ================= -->
+      <section id="view-editor" class="view hidden">
+        <div class="list-head">
+          <h2 id="editor-title">Edit profile</h2>
+          <div class="btn-row">
+            <button class="btn-ghost" id="btn-cancel" type="button">Back</button>
+            <button class="btn-primary" id="btn-save" type="button">Save</button>
+          </div>
+        </div>
+        <div class="grid editor-grid">
+          <div class="card">
+            <h3>Server</h3>
+            <label class="field-label" for="f-name">Name</label>
+            <input class="input" id="f-name" type="text" placeholder="My server">
+            <label class="field-label" for="f-host">Host</label>
+            <input class="input" id="f-host" type="text" placeholder="vpn.example.com or 1.2.3.4">
+            <div class="field-pair">
+              <div>
+                <label class="field-label" for="f-port">Port</label>
+                <input class="input" id="f-port" type="number" min="1" max="65535" value="443">
+              </div>
+              <div>
+                <label class="field-label" for="f-sni">SNI override</label>
+                <input class="input" id="f-sni" type="text" placeholder="empty = host">
+              </div>
+            </div>
+            <div class="field-pair">
+              <div>
+                <label class="field-label" for="f-user">Username</label>
+                <input class="input" id="f-user" type="text" autocomplete="username">
+              </div>
+              <div>
+                <label class="field-label" for="f-pass">Password</label>
+                <input class="input" id="f-pass" type="password" autocomplete="current-password">
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>TLS</h3>
+            <label class="field-label" for="f-tls">Certificate mode</label>
+            <select class="input select" id="f-tls">
+              <option value="verify">Verify (system CA)</option>
+              <option value="insecure">Insecure (accept any)</option>
+              <option value="custom_ca">Custom CA</option>
+            </select>
+            <div id="ca-wrap" class="hidden">
+              <label class="field-label" for="f-ca">CA bundle path (PEM)</label>
+              <input class="input" id="f-ca" type="text" placeholder="C:\certs\myca.pem">
+            </div>
+
+            <label class="field-label" for="f-mtu">MTU (0 = engine default 1400)</label>
+            <input class="input" id="f-mtu" type="number" min="0" max="1500" value="0">
+
+            <div class="switch-row">
+              <label class="switch"><input type="checkbox" id="f-ipv4" checked><span></span> IPv4</label>
+              <label class="switch"><input type="checkbox" id="f-ipv6"><span></span> IPv6</label>
+            </div>
+
+            <label class="field-label" for="f-dns">DNS override (one IP per line, empty = server DNS)</label>
+            <textarea class="input textarea mono" id="f-dns" rows="3" placeholder="1.1.1.1"></textarea>
+          </div>
+
+          <div class="card">
+            <h3>Auto-reconnect</h3>
+            <div class="switch-row">
+              <label class="switch"><input type="checkbox" id="f-reconnect" checked><span></span> Reconnect automatically</label>
+            </div>
+            <div class="field-pair">
+              <div>
+                <label class="field-label" for="f-backoff-init">Initial backoff (ms)</label>
+                <input class="input" id="f-backoff-init" type="number" min="100" value="1000">
+              </div>
+              <div>
+                <label class="field-label" for="f-backoff-max">Max backoff (ms)</label>
+                <input class="input" id="f-backoff-max" type="number" min="1000" value="30000">
+              </div>
+            </div>
+            <div class="muted" style="font-size:12px">
+              Stops permanently on rejected credentials (auth errors are not retried).
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Upstream proxy</h3>
+            <label class="field-label" for="f-proxy-type">Type</label>
+            <select class="input select" id="f-proxy-type">
+              <option value="">None (direct)</option>
+              <option value="http">HTTP CONNECT</option>
+              <option value="socks5">SOCKS5</option>
+            </select>
+            <div id="proxy-wrap">
+              <label class="field-label" for="f-proxy-host">Proxy host</label>
+              <input class="input" id="f-proxy-host" type="text" placeholder="127.0.0.1 or proxy.example.com">
+              <label class="field-label" for="f-proxy-port">Proxy port</label>
+              <input class="input" id="f-proxy-port" type="number" min="1" max="65535" value="3128">
+              <div class="field-pair">
+                <div>
+                  <label class="field-label" for="f-proxy-user">Username (optional)</label>
+                  <input class="input" id="f-proxy-user" type="text" autocomplete="off">
+                </div>
+                <div>
+                  <label class="field-label" for="f-proxy-pass">Password (optional)</label>
+                  <input class="input" id="f-proxy-pass" type="password" autocomplete="new-password">
+                </div>
+              </div>
+            </div>
+            <div class="muted hint">
+              Routes the <b>outer</b> transport of every session of this profile
+              through the proxy: HTTP CONNECT or SOCKS5 to reach the SSTP
+              server, with optional credentials. Leave as None for a direct
+              connection.
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Tunnels</h3>
+            <label class="field-label" for="f-tunnels">Parallel sessions (1-8)</label>
+            <div class="stepper">
+              <button class="btn-ghost" id="tunnels-dec" type="button" aria-label="Fewer tunnels">−</button>
+              <input class="input stepper-value" id="f-tunnels" type="number" min="1" max="8" value="1">
+              <button class="btn-ghost" id="tunnels-inc" type="button" aria-label="More tunnels">+</button>
+            </div>
+            <div class="muted hint">
+              Opens this many parallel SSTP sessions (each with its own inner
+              IP). Concurrent flows are spread across them for aggregate
+              throughput, and each session redials on its own if it drops.
+              1 = classic single session.
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Local proxy (proxy mode)</h3>
+            <div class="field-pair">
+              <div>
+                <label class="field-label" for="f-socks">SOCKS5 port</label>
+                <input class="input" id="f-socks" type="number" min="1" max="65535" value="10808">
+              </div>
+              <div>
+                <label class="field-label" for="f-http">HTTP port</label>
+                <input class="input" id="f-http" type="number" min="1" max="65535" value="10809">
+              </div>
+            </div>
+            <div class="switch-row">
+              <label class="switch"><input type="checkbox" id="f-sysproxy"><span></span> Set Windows system proxy while connected</label>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast hidden"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

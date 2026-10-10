@@ -1,14 +1,14 @@
 {
   "$schema": "https://wails.io/schemas/config.v2.json",
-  "name": "sstpflash",
-  "outputfilename": "sstpflash",
+  "name": "SwiftSSTP",
+  "outputfilename": "swiftsstp",
   "frontend:install": "",
   "frontend:build": "",
   "frontend:dev": "",
   "frontend:dev:watcher": "",
   "frontend:dev:serverUrl": "auto",
   "author": {
-    "name": "SSTPflash",
+    "name": "SwiftSSTP",
     "email": ""
   }
 }

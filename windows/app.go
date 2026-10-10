@@ -4,16 +4,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	xproxy "golang.org/x/net/proxy"
 
-	"sstpflash/windows/internal/engine"
-	"sstpflash/windows/internal/proxy"
-	"sstpflash/windows/internal/store"
-	"sstpflash/usage"
-	"sstpflash/windows/internal/sysproxy"
+	"swiftsstp/usage"
+	"swiftsstp/windows/internal/engine"
+	"swiftsstp/windows/internal/proxy"
+	"swiftsstp/windows/internal/store"
+	"swiftsstp/windows/internal/sysproxy"
 )
 
 const maxLogLines = 500
@@ -36,7 +41,7 @@ func NewApp() *App {
 	a := &App{}
 	u, err := store.OpenUsage()
 	if err != nil {
-		fmt.Printf("sstpflash: usage store unavailable: %v\n", err)
+		fmt.Printf("swiftsstp: usage store unavailable: %v\n", err)
 	} else {
 		a.usage = u
 	}
@@ -54,7 +59,7 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	a.logf("sstpflash: ui ready")
+	a.logf("swiftsstp: ui ready")
 }
 
 func (a *App) shutdown(context.Context) {
@@ -219,6 +224,10 @@ func (a *App) dispatch(action string, args []byte) (any, error) {
 	case "status":
 		return a.mgr.Status(), nil
 
+	// ---- geoip: public egress IP as seen by Cloudflare ----
+	case "geoip":
+		return a.geoIP()
+
 	// ---- usage / logs ----
 	case "usage_totals":
 		var in struct {
@@ -247,4 +256,99 @@ func (a *App) dispatch(action string, args []byte) (any, error) {
 	default:
 		return nil, fmt.Errorf("unknown action %q", action)
 	}
+}
+
+// ---- geoip ----
+
+const geoTraceURL = "https://www.cloudflare.com/cdn-cgi/trace"
+
+// geoIP reports the machine's public egress address as seen by Cloudflare's
+// cdn-cgi/trace endpoint: {ip, country, colo}.
+//
+// Dial path: while connected in local-proxy mode the request goes through the
+// app's own SOCKS5 inbound so the address reported is the *tunnelled* egress
+// (what remote sites see), not the host's own. In whole-device mode or when
+// disconnected it dials normally — system routes already carry the traffic
+// through Wintun while the tunnel is up.
+func (a *App) geoIP() (any, error) {
+	st := a.mgr.Status()
+
+	base := &net.Dialer{Timeout: 4 * time.Second}
+	var dial xproxy.Dialer = base
+	if st.State == "connected" && st.Mode == string(engine.ModeProxy) && st.SocksPort > 0 {
+		d, err := xproxy.SOCKS5("tcp", fmt.Sprintf("127.0.0.1:%d", st.SocksPort), nil, base)
+		if err != nil {
+			return nil, fmt.Errorf("geoip: socks dialer: %w", err)
+		}
+		dial = d
+	}
+
+	transport := &http.Transport{
+		DisableKeepAlives: true,
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			if cd, ok := dial.(xproxy.ContextDialer); ok {
+				return cd.DialContext(ctx, network, addr)
+			}
+			// Dialers without context support: run the dial in the
+			// background and honour the deadline ourselves.
+			type result struct {
+				c net.Conn
+				e error
+			}
+			ch := make(chan result, 1)
+			go func() {
+				c, e := dial.Dial(network, addr)
+				ch <- result{c, e}
+			}()
+			select {
+			case r := <-ch:
+				return r.c, r.e
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		},
+	}
+	defer transport.CloseIdleConnections()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, geoTraceURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "SwiftSSTP")
+
+	resp, err := (&http.Client{Transport: transport, Timeout: 4 * time.Second}).Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("geoip: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("geoip: trace endpoint returned %s", resp.Status)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	if err != nil {
+		return nil, fmt.Errorf("geoip: read: %w", err)
+	}
+
+	out := map[string]string{}
+	for _, line := range strings.Split(string(body), "\n") {
+		k, v, ok := strings.Cut(strings.TrimSpace(line), "=")
+		if !ok {
+			continue
+		}
+		switch k {
+		case "ip", "loc", "colo":
+			out[k] = v
+		}
+	}
+	if out["ip"] == "" {
+		return nil, fmt.Errorf("geoip: no ip= line in trace")
+	}
+	return map[string]any{
+		"ip":      out["ip"],
+		"country": out["loc"],
+		"colo":    out["colo"],
+	}, nil
 }

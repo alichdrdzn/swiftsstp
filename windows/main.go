@@ -1,5 +1,5 @@
-// Command sstpflash is the Sstpflash Windows client: a Wails v2 desktop
-// app (Go backend, buildless vanilla-JS frontend) around the Sstpflash
+// Command main is the SwiftSSTP Windows client: a Wails v2 desktop
+// app (Go backend, buildless vanilla-JS frontend) around the SwiftSSTP
 // SSTP engine, with whole-device tunnel mode (Wintun) and v2rayN-style
 // local proxy mode (gVisor netstack + SOCKS5/HTTP inbounds).
 package main
@@ -25,7 +25,7 @@ func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:             "Sstpflash",
+		Title:             "SwiftSSTP",
 		Width:             1120,
 		Height:            780,
 		MinWidth:          920,

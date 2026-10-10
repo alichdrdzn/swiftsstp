@@ -17,8 +17,8 @@ import (
 	"gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
 	"gvisor.dev/gvisor/pkg/tcpip/transport/udp"
 
-	"sstpflash/tunnel"
-	"sstpflash/windows/internal/dataplane"
+	"swiftsstp/tunnel"
+	"swiftsstp/windows/internal/dataplane"
 )
 
 const nicID = tcpip.NICID(1)

@@ -9,8 +9,8 @@ import (
 	"net"
 	"sync"
 
-	"sstpflash/tunnel"
-	"sstpflash/windows/internal/dataplane"
+	"swiftsstp/tunnel"
+	"swiftsstp/windows/internal/dataplane"
 )
 
 // Config configures the local listeners.

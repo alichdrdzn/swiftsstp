@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"time"
 
-	"sstpflash/multi"
-	"sstpflash/tunnel"
+	"swiftsstp/multi"
+	"swiftsstp/tunnel"
 )
 
 // Mode selects the data plane.

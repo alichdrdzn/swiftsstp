@@ -2,7 +2,7 @@
 
 package main
 
-import "sstpflash/windows/internal/dataplane"
+import "swiftsstp/windows/internal/dataplane"
 
 // tunnelDataPlane returns nil off Windows: the engine then refuses
 // whole-device mode up front instead of dialing and failing (see

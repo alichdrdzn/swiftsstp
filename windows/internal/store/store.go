@@ -1,6 +1,12 @@
 // Package store persists profiles.json (+ opens usage-stats.json) in the
-// location from docs/PROFILE_SCHEMA.md: %APPDATA%\SSTPflash on Windows,
-// $SSTPFLASH_HOME or ~/.config/SSTPflash elsewhere (dev/test).
+// location from docs/PROFILE_SCHEMA.md: %APPDATA%\SwiftSSTP on Windows,
+// $SWIFTSSTP_HOME or ~/.config/SwiftSSTP elsewhere (dev/test).
+//
+// Users upgrading from the pre-rename SSTPflash builds are migrated on
+// first use: the legacy config directory (%APPDATA%\SSTPflash /
+// ~/.config/SSTPflash) is renamed to the new SwiftSSTP path when the new
+// path does not exist yet, and the legacy SSTPFLASH_HOME env var is still
+// honored as a fallback when SWIFTSSTP_HOME is unset.
 package store
 
 import (
@@ -13,11 +19,18 @@ import (
 	"runtime"
 	"sync"
 
-	"sstpflash/usage"
-	"sstpflash/windows/internal/engine"
+	"swiftsstp/usage"
+	"swiftsstp/windows/internal/engine"
 )
 
 var mu sync.Mutex
+
+// Legacy names from the pre-rename SSTPflash builds; kept only so
+// existing installs migrate to the SwiftSSTP names.
+const (
+	legacyDirName = "SSTPflash"
+	legacyEnvVar  = "SSTPFLASH_HOME"
+)
 
 // Dir returns (and creates) the config directory.
 func Dir() (string, error) {
@@ -31,20 +44,40 @@ func Dir() (string, error) {
 			}
 			base = filepath.Join(home, "AppData", "Roaming")
 		}
-		dir = filepath.Join(base, "SSTPflash")
-	} else if h := os.Getenv("SSTPFLASH_HOME"); h != "" {
+		dir = migrateLegacy(filepath.Join(base, legacyDirName), filepath.Join(base, "SwiftSSTP"))
+	} else if h := os.Getenv("SWIFTSSTP_HOME"); h != "" {
+		dir = h
+	} else if h := os.Getenv(legacyEnvVar); h != "" {
+		// Pre-rename env override: still honored verbatim.
 		dir = h
 	} else {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return "", err
 		}
-		dir = filepath.Join(home, ".config", "SSTPflash")
+		dir = migrateLegacy(filepath.Join(home, ".config", legacyDirName), filepath.Join(home, ".config", "SwiftSSTP"))
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", fmt.Errorf("config dir: %w", err)
 	}
 	return dir, nil
+}
+
+// migrateLegacy returns the SwiftSSTP config path, renaming the legacy
+// SSTPflash directory there when the new path is absent and the old one
+// exists. Rename is best effort: if it fails (e.g. a file is locked), the
+// legacy directory is returned so existing data keeps working.
+func migrateLegacy(legacyDir, newDir string) string {
+	if _, err := os.Stat(newDir); err == nil {
+		return newDir // fresh install or already migrated
+	}
+	if _, err := os.Stat(legacyDir); err != nil {
+		return newDir // nothing to migrate
+	}
+	if err := os.Rename(legacyDir, newDir); err != nil {
+		return legacyDir
+	}
+	return newDir
 }
 
 func profilesPath() (string, error) {
@@ -137,7 +170,7 @@ func Delete(id string) error {
 	return Save(out)
 }
 
-// OpenUsage opens the lifetime usage store (sstpflash/usage) next to
+// OpenUsage opens the lifetime usage store (swiftsstp/usage) next to
 // profiles.json: usage-stats.json in the config directory.
 func OpenUsage() (*usage.Store, error) {
 	dir, err := Dir()

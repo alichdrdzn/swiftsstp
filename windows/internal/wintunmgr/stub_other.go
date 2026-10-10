@@ -7,8 +7,8 @@ package wintunmgr
 import (
 	"errors"
 
-	"sstpflash/tunnel"
-	"sstpflash/windows/internal/dataplane"
+	"swiftsstp/tunnel"
+	"swiftsstp/windows/internal/dataplane"
 )
 
 // Manager is the Windows-only whole-device data plane.

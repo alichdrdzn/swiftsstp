@@ -3,8 +3,8 @@
 package main
 
 import (
-	"sstpflash/windows/internal/dataplane"
-	"sstpflash/windows/internal/wintunmgr"
+	"swiftsstp/windows/internal/dataplane"
+	"swiftsstp/windows/internal/wintunmgr"
 )
 
 // tunnelDataPlane returns the whole-device (Wintun) data plane on Windows.

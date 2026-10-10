@@ -18,9 +18,9 @@ import (
 	"golang.org/x/sys/windows"
 	"golang.zx2c4.com/wireguard/tun"
 
-	"sstpflash/tunnel"
-	"sstpflash/windows/assets"
-	"sstpflash/windows/internal/dataplane"
+	"swiftsstp/tunnel"
+	"swiftsstp/windows/assets"
+	"swiftsstp/windows/internal/dataplane"
 )
 
 // Manager implements dataplane.DataPlane for whole-device mode.
@@ -60,7 +60,7 @@ func ensureDLL() error {
 		if err != nil {
 			base = os.TempDir()
 		}
-		dir := filepath.Join(base, "Sstpflash")
+		dir := filepath.Join(base, "SwiftSSTP")
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			dllErr = fmt.Errorf("wintun dir: %w", err)
 			return
@@ -115,7 +115,7 @@ func (m *Manager) Start(sess dataplane.Stream, res tunnel.Result, cfg dataplane.
 		m.logf("wintun: %s", op.desc)
 	}
 
-	// Adapter up (reuses an existing "Sstpflash" adapter if present).
+	// Adapter up (reuses an existing "SwiftSSTP" adapter if present).
 	dev, err := tun.CreateTUN(ifName, res.MTU)
 	if err != nil {
 		m.runUndoLocked()
