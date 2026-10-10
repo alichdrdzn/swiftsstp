@@ -31,7 +31,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"sstpflash/tunnel"
+	"swiftsstp/tunnel"
 )
 
 // MaxSessions caps the bundle size (guards config typos).

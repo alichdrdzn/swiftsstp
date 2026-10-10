@@ -1,12 +1,30 @@
+# Build outputs
 bin/
-.vendor/
-*.exe
-*.apk
-*.aar
 android/.gradle/
 android/build/
 android/app/build/
-windows/frontend/dist/
-windows/build/
+windows/build/bin/
+*.exe
+*.apk
+
+# gomobile artifacts are rebuilt by CI (see .github/workflows/ci.yml):
+#   gomobile bind -javapkg swiftsstp -o android/app/libs/mobile.aar ./mobile
+*.aar
+android/app/libs/mobile-sources.jar
+
+# Runtime data (created by the apps, never committed)
 usage-stats.json
 profiles.json
+
+# Signing material — the release keystore lives OUTSIDE the repo and in
+# GitHub Actions secrets; never commit one.
+*.keystore
+*.jks
+local.properties
+
+# Vendored toolchains / editor droppings
+.vendor/
+.DS_Store
+.idea/
+.vscode/
+*.iml

@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"sstpflash/multi"
-	"sstpflash/tunnel"
+	"swiftsstp/multi"
+	"swiftsstp/tunnel"
 )
 
 // Bundle is the gomobile binding for the multi-session engine: N parallel

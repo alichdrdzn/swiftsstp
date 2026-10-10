@@ -1,4 +1,4 @@
-// Package mobile is the gomobile binding surface for the Sstpflash SSTP
+// Package mobile is the gomobile binding surface for the SwiftSSTP SSTP
 // engine. Everything exported here is a type gomobile can marshal across
 // JNI: strings, ints, int64s, bools, byte slices, error. No net.IP, no
 // slog.Logger, no time.Duration crosses the boundary — those live behind
@@ -23,7 +23,7 @@ import (
 	"syscall"
 	"time"
 
-	"sstpflash/tunnel"
+	"swiftsstp/tunnel"
 )
 
 // Protector is implemented by the Android side as VpnService.protect(fd):

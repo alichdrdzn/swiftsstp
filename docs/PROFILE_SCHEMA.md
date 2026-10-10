@@ -1,4 +1,4 @@
-# SSTPflash profile schema (v1)
+# SwiftSSTP profile schema (v1)
 
 Both the Android and Windows apps store profiles as JSON with this exact
 shape. Field names are canonical; apps may add app-specific extras under
@@ -55,7 +55,9 @@ shape. Field names are canonical; apps may add app-specific extras under
   empty = whole device
 - File location:
   - Android: app-internal files dir (`filesDir/profiles.json`)
-  - Windows: `%APPDATA%\SSTPflash\profiles.json` (dev: `./profiles.json`)
+  - Windows: `%APPDATA%\SwiftSSTP\profiles.json` (dev: `./profiles.json`)
+  - Linux/macOS (dev/test): `$SWIFTSSTP_HOME/profiles.json`, defaulting to
+    `~/.config/SwiftSSTP/profiles.json`
 
 # Usage stats (separate file, same directory, `usage-stats.json`)
 

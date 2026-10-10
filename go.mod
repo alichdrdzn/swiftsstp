@@ -1,4 +1,4 @@
-module sstpflash
+module swiftsstp
 
 go 1.27.0
 

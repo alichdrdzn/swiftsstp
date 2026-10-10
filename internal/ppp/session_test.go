@@ -5,7 +5,7 @@ import (
 	"net"
 	"testing"
 
-	"sstpflash/internal/mschap"
+	"swiftsstp/internal/mschap"
 )
 
 // captureTransport records the frames the session sends.

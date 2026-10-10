@@ -8,8 +8,8 @@ import (
 	"io"
 	"strings"
 
-	"sstpflash/internal/mschap"
-	"sstpflash/internal/sstp/wire"
+	"swiftsstp/internal/mschap"
+	"swiftsstp/internal/sstp/wire"
 )
 
 // sstpURI is the fixed SSTP endpoint every server exposes ([MS-SSTP] 2.2).

@@ -9,7 +9,7 @@ import (
 	"net"
 	"sync"
 
-	"sstpflash/internal/mschap"
+	"swiftsstp/internal/mschap"
 )
 
 // trimToIP trims PPP Information-field padding the way the carried protocol

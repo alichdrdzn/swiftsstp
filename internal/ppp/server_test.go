@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"sstpflash/internal/mschap"
+	"swiftsstp/internal/mschap"
 )
 
 // transportFunc adapts a function to the Transport interface.

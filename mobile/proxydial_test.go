@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"sstpflash/tunnel"
+	"swiftsstp/tunnel"
 )
 
 // startEcho accepts one TCP connection and echoes everything back.

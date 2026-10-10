@@ -1,4 +1,4 @@
-SSTPflash SSTP client
+SwiftSSTP SSTP client
 ======================
 
 The protocol stack under internal/ (PPP, MS-CHAPv2/MPPE, SSTP wire codec,

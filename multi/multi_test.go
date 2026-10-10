@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"sstpflash/tunnel"
+	"swiftsstp/tunnel"
 )
 
 // ---- fakes ----

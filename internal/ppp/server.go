@@ -7,7 +7,7 @@ import (
 	"net"
 	"sync"
 
-	"sstpflash/internal/mschap"
+	"swiftsstp/internal/mschap"
 )
 
 // Authenticator returns the password for a username, or ok=false if unknown. The

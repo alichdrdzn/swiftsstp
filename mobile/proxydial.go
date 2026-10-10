@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"sstpflash/tunnel"
+	"swiftsstp/tunnel"
 )
 
 // newProxy builds the engine's upstream-proxy config from the flattened

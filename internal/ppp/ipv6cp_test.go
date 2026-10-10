@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"sstpflash/internal/mschap"
+	"swiftsstp/internal/mschap"
 )
 
 // ipv6Handler records the session's events and signals NetworkUp/Closed on

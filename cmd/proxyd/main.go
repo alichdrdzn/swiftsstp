@@ -1,4 +1,4 @@
-// Command proxyd is a minimal upstream proxy for testing SSTPflash's
+// Command proxyd is a minimal upstream proxy for testing SwiftSSTP's
 // "connect via a proxy" feature: it speaks HTTP CONNECT and SOCKS5 on one
 // port (distinguished per connection by the first byte: 'C'/'G'/'P' = HTTP
 // method line, 0x05 = SOCKS5). Optional basic auth for HTTP, optional

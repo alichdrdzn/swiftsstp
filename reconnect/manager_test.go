@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"sstpflash/internal/ppp"
-	"sstpflash/tunnel"
+	"swiftsstp/internal/ppp"
+	"swiftsstp/tunnel"
 )
 
 // eventLog records the manager's callbacks in order, for asserting the

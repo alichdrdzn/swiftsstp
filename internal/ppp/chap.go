@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"sstpflash/internal/cryptoutil"
-	"sstpflash/internal/mschap"
+	"swiftsstp/internal/cryptoutil"
+	"swiftsstp/internal/mschap"
 )
 
 // CHAP codes (RFC 1994), reused by MS-CHAPv2.
