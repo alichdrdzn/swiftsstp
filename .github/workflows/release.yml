@@ -88,6 +88,9 @@ jobs:
           # the ${{ env }} context, so export NDK_HOME from the shell instead.
           SDK="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
           export ANDROID_NDK_HOME="$SDK/ndk/27.2.12479018"
+          # gomobile bind does NOT create the output directory, and the AAR
+          # is gitignored so a fresh checkout has no android/app/libs/ at all.
+          mkdir -p android/app/libs
           gomobile bind -target=android -androidapi 26 -javapkg swiftsstp \
             -ldflags='-s -w' -trimpath -o android/app/libs/mobile.aar ./mobile
       - uses: gradle/actions/setup-gradle@v4
