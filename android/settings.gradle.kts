@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Sstpflash"
+rootProject.name = "SwiftSSTP"
 include(":app")

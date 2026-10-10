@@ -1,10 +1,10 @@
-package com.sstpflash.client
+package com.swiftsstp.client
 
 import android.content.Context
-import com.sstpflash.client.data.ProfileStore
-import com.sstpflash.client.data.UsageEntry
-import com.sstpflash.client.data.UsageStore
-import com.sstpflash.client.model.Profile
+import com.swiftsstp.client.data.ProfileStore
+import com.swiftsstp.client.data.UsageEntry
+import com.swiftsstp.client.data.UsageStore
+import com.swiftsstp.client.model.Profile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -14,21 +14,24 @@ import java.io.File
 
 /** Where the app currently is. Screens are plain state, not a nav library. */
 sealed class Screen {
+    object Home : Screen()
     object Profiles : Screen()
+    object Stats : Screen()
+    object Log : Screen()
     data class Editor(val profileId: String?) : Screen()
-    object Connection : Screen()
 }
 
 /**
- * Application state shared by the three screens: the profile list, lifetime
- * usage, the selected profile for the connection screen, and navigation.
+ * Application state shared by the tabs: the profile list, lifetime usage, the
+ * selected profile for the Home tab, and navigation.
  * The VPN service writes usage through [UsageStore] and bumps [usage] itself.
  */
 object AppModel {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    val screen = MutableStateFlow<Screen>(Screen.Profiles)
+    // The Windows client opens on the connection view, so Android opens on Home.
+    val screen = MutableStateFlow<Screen>(Screen.Home)
     val profiles = MutableStateFlow<List<Profile>>(emptyList())
     val usage = MutableStateFlow<Map<String, UsageEntry>>(emptyMap())
     val selectedId = MutableStateFlow<String?>(null)

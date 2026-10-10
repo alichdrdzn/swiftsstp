@@ -1,6 +1,6 @@
-package com.sstpflash.client.data
+package com.swiftsstp.client.data
 
-import com.sstpflash.client.model.Profile
+import com.swiftsstp.client.model.Profile
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File

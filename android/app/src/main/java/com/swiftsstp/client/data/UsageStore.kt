@@ -1,4 +1,4 @@
-package com.sstpflash.client.data
+package com.swiftsstp.client.data
 
 import org.json.JSONObject
 import java.io.File

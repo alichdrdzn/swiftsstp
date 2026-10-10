@@ -1,4 +1,4 @@
-package com.sstpflash.client.model
+package com.swiftsstp.client.model
 
 import org.json.JSONArray
 import org.json.JSONObject

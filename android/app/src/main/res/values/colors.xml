@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ink_background">#0A0D13</color>
-    <color name="accent">#6EA8FF</color>
-    <color name="launcher_background">#0A0D13</color>
+    <!-- Launch-window chrome: matches the Windows palette (bg / accent). -->
+    <color name="ink_background">#0B0F17</color>
+    <color name="accent">#4F8CFF</color>
+    <!-- The launcher glyph sits on a pure black square. -->
+    <color name="launcher_background">#000000</color>
 </resources>

@@ -1,4 +1,4 @@
-package com.sstpflash.client.vpn
+package com.swiftsstp.client.vpn
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -10,17 +10,17 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
-import com.sstpflash.client.AppModel
-import com.sstpflash.client.R
-import com.sstpflash.client.VpnController
-import com.sstpflash.client.data.UsageStore
-import com.sstpflash.client.model.AppRules
-import com.sstpflash.client.model.Profile
+import com.swiftsstp.client.AppModel
+import com.swiftsstp.client.R
+import com.swiftsstp.client.VpnController
+import com.swiftsstp.client.data.UsageStore
+import com.swiftsstp.client.model.AppRules
+import com.swiftsstp.client.model.Profile
 import org.json.JSONObject
-import sstpflash.mobile.Bundle
-import sstpflash.mobile.Client
-import sstpflash.mobile.Mobile
-import sstpflash.mobile.Protector
+import swiftsstp.mobile.Bundle
+import swiftsstp.mobile.Client
+import swiftsstp.mobile.Mobile
+import swiftsstp.mobile.Protector
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -41,15 +41,15 @@ import java.util.concurrent.CountDownLatch
  *     stop permanently on an authentication error;
  *  5. flush lifetime usage to `usage-stats.json` periodically and at teardown.
  */
-class SstpflashVpnService : VpnService() {
+class SwiftSSTPVpnService : VpnService() {
 
     companion object {
-        const val ACTION_CONNECT = "com.sstpflash.client.action.CONNECT"
-        const val ACTION_DISCONNECT = "com.sstpflash.client.action.DISCONNECT"
+        const val ACTION_CONNECT = "com.swiftsstp.client.action.CONNECT"
+        const val ACTION_DISCONNECT = "com.swiftsstp.client.action.DISCONNECT"
         const val EXTRA_PROFILE_JSON = "profile_json"
 
         private const val NOTIF_ID = 7
-        private const val CHANNEL_ID = "sstpflash_vpn"
+        private const val CHANNEL_ID = "swiftsstp_vpn"
         private const val CONNECT_TIMEOUT_MS = 20_000L
         private const val KEEPALIVE_SEC = 30
         private const val USAGE_FLUSH_MS = 10_000L
@@ -59,7 +59,7 @@ class SstpflashVpnService : VpnService() {
         private val TIME_FMT = DateTimeFormatter.ofPattern("HH:mm:ss")
 
         @Volatile
-        private var instance: SstpflashVpnService? = null
+        private var instance: SwiftSSTPVpnService? = null
 
         fun isRunning(): Boolean = instance != null
 
@@ -188,7 +188,7 @@ class SstpflashVpnService : VpnService() {
                 (if (p.proxy.enabled) " · via ${p.proxy.label()}" else ""),
         )
 
-        worker = Thread({ runLoop(p) }, "sstpflash-loop").apply {
+        worker = Thread({ runLoop(p) }, "swiftsstp-loop").apply {
             isDaemon = true
             start()
         }
@@ -404,7 +404,7 @@ class SstpflashVpnService : VpnService() {
     // ---- engine abstraction -------------------------------------------
 
     /**
-     * The slice of sstpflash.mobile.Client and sstpflash.mobile.Bundle the
+     * The slice of swiftsstp.mobile.Client and swiftsstp.mobile.Bundle the
      * service drives. Both gomobile types expose the same surface, but they
      * share no supertype, so one adapter per type keeps the loop, the
      * bridge and the ticker single-path.
@@ -501,7 +501,7 @@ class SstpflashVpnService : VpnService() {
     private fun establishTun(p: Profile, stats: Stats): ParcelFileDescriptor? {
         return try {
             val builder = Builder()
-            builder.setSession(p.name.ifBlank { "Sstpflash" })
+            builder.setSession(p.name.ifBlank { "SwiftSSTP" })
             builder.setMtu(if (stats.mtu in 576..1500) stats.mtu else 1400)
             builder.setBlocking(true)
 
@@ -582,7 +582,7 @@ class SstpflashVpnService : VpnService() {
             } finally {
                 dead.countDown()
             }
-        }, "slip-to-tun")
+        }, "eng-to-tun")
 
         // TUN -> engine: one kernel packet in, one inner packet out.
         val fromTun = Thread({
@@ -608,7 +608,7 @@ class SstpflashVpnService : VpnService() {
             } finally {
                 dead.countDown()
             }
-        }, "slip-from-tun")
+        }, "tun-to-eng")
 
         toTun.isDaemon = true
         fromTun.isDaemon = true

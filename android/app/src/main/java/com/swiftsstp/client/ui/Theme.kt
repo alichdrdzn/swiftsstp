@@ -1,4 +1,4 @@
-package com.sstpflash.client.ui
+package com.swiftsstp.client.ui
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
@@ -10,24 +10,33 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-// Palette: near-black ink, cool blue accent, mint for the connected state.
-// Deliberately dark-only — a VPN console reads better without a white flash
-// when the tunnel drops at night.
-val Ink = Color(0xFF0A0D13)
-val Surface1 = Color(0xFF11151D)
-val Surface2 = Color(0xFF171D27)
-val Surface3 = Color(0xFF1D2531)
-val Hairline = Color(0xFF2A3242)
-val TextPrimary = Color(0xFFE6E9F2)
-val TextMuted = Color(0xFF98A2B8)
-val AccentBlue = Color(0xFF7FB0FF)
-val Mint = Color(0xFF7FDCC0)
-val Amber = Color(0xFFFFC46B)
-val Rose = Color(0xFFFF8080)
+// Palette lifted from the Windows client (windows/frontend/dist/app.css
+// `:root`): near-black ink, blue → violet accent gradient, mint for the
+// connected state. Deliberately dark-only — a VPN console reads better
+// without a white flash when the tunnel drops at night.
+val Ink = Color(0xFF0B0F17) // --bg
+val Surface1 = Color(0xFF131A26) // --card
+val Surface2 = Color(0xFF172031) // --card-2
+val Surface3 = Color(0xFF1C2537) // --card-3
+val Hairline = Color(0xFF232C3D) // --border
+val Hairline2 = Color(0xFF2A3446) // --border-2 (ghost buttons, inputs)
+val TextPrimary = Color(0xFFE7EDF8) // --text
+val TextMuted = Color(0xFF8B96AB) // --muted
+val AccentBlue = Color(0xFF4F8CFF) // --accent
+val AccentViolet = Color(0xFF7C5CFF) // --accent-2
+val Mint = Color(0xFF2FD08C) // --green
+val Amber = Color(0xFFFFB454) // --amber
+val Rose = Color(0xFFFF6B6B) // --red
 
-private val SstpflashColors = darkColorScheme(
+/** Gradient behind `.log` / inset wells — Windows `#0a0e15`. */
+val WellBackground = Color(0xFF0A0E15)
+
+/** Field chrome — Windows `.input` background (`--bg-2`). */
+val FieldBackground = Color(0xFF0E1420)
+
+private val SwiftSSTPColours = darkColorScheme(
     primary = AccentBlue,
-    onPrimary = Color(0xFF06101F),
+    onPrimary = Color.White,
     primaryContainer = Color(0xFF1C2B45),
     onPrimaryContainer = Color(0xFFD8E6FF),
     secondary = Mint,
@@ -46,16 +55,16 @@ private val SstpflashColors = darkColorScheme(
     onSurfaceVariant = TextMuted,
     surfaceContainer = Surface2,
     surfaceContainerHigh = Surface3,
-    surfaceContainerHighest = Color(0xFF232B38),
+    surfaceContainerHighest = WellBackground,
     outline = Hairline,
-    outlineVariant = Color(0xFF1F2734),
+    outlineVariant = Hairline2,
     error = Rose,
     onError = Color(0xFF3A0004),
     errorContainer = Color(0xFF4A1B1F),
     onErrorContainer = Color(0xFFFFD9DA),
 )
 
-private val SstpflashTypography = Typography(
+private val SwiftSSTPTypography = Typography(
     displaySmall = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.SemiBold,
@@ -122,11 +131,12 @@ private val SstpflashTypography = Typography(
     ),
 )
 
+/** App theme: the Windows palette, dark-only. */
 @Composable
-fun SstpflashTheme(content: @Composable () -> Unit) {
+fun SwiftSSTPTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = SstpflashColors,
-        typography = SstpflashTypography,
+        colorScheme = SwiftSSTPColours,
+        typography = SwiftSSTPTypography,
         content = content,
     )
 }

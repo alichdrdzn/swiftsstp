@@ -1,11 +1,11 @@
-package com.sstpflash.client
+package com.swiftsstp.client
 
 import android.content.Context
 import android.content.Intent
 import android.net.VpnService
 import androidx.core.content.ContextCompat
-import com.sstpflash.client.model.Profile
-import com.sstpflash.client.vpn.SstpflashVpnService
+import com.swiftsstp.client.model.Profile
+import com.swiftsstp.client.vpn.SwiftSSTPVpnService
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
@@ -86,17 +86,17 @@ object VpnController {
     fun prepare(context: Context): Intent? = VpnService.prepare(context)
 
     fun start(context: Context, profile: Profile) {
-        val intent = Intent(context, SstpflashVpnService::class.java)
-            .setAction(SstpflashVpnService.ACTION_CONNECT)
-            .putExtra(SstpflashVpnService.EXTRA_PROFILE_JSON, profile.toJson().toString())
+        val intent = Intent(context, SwiftSSTPVpnService::class.java)
+            .setAction(SwiftSSTPVpnService.ACTION_CONNECT)
+            .putExtra(SwiftSSTPVpnService.EXTRA_PROFILE_JSON, profile.toJson().toString())
         ContextCompat.startForegroundService(context, intent)
     }
 
     fun startAfterConsent(context: Context, profile: Profile) = start(context, profile)
 
     fun stop() {
-        if (SstpflashVpnService.isRunning()) {
-            SstpflashVpnService.requestStop()
+        if (SwiftSSTPVpnService.isRunning()) {
+            SwiftSSTPVpnService.requestStop()
         } else {
             // No service to talk to: settle the UI rather than leaving a
             // stale "connected" chip on screen.

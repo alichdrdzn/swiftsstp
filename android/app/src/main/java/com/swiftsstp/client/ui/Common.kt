@@ -1,32 +1,68 @@
-package com.sstpflash.client.ui
+package com.swiftsstp.client.ui
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
-import com.sstpflash.client.VpnController
-import com.sstpflash.client.model.Profile
+import androidx.compose.ui.unit.sp
+import com.swiftsstp.client.R
+import com.swiftsstp.client.VpnController
+import com.swiftsstp.client.model.Profile
 
 /** Human byte counts: "812 B", "1.2 MB", "3.04 GB". */
 fun formatBytes(v: Long): String = when {
@@ -42,7 +78,142 @@ fun formatRate(v: Long): String = when {
     else -> "$v B/s"
 }
 
-/** Small uppercase caption above a group of fields. */
+/** Blue → violet action gradient — mirrors Windows `.btn-primary`. */
+val PrimaryGradient = Brush.horizontalGradient(listOf(AccentBlue, AccentViolet))
+
+/** Red action gradient — mirrors Windows `.btn-primary.disconnect`. */
+val DisconnectGradient = Brush.horizontalGradient(listOf(Color(0xFFFF5F6D), Color(0xFFFF2D55)))
+
+/** Which bottom-bar tab is on screen; mirrors the WARP `.nav` quartet. */
+enum class NavTab { HOME, PROFILES, STATS, LOG }
+
+/** Style of the one big action button. */
+enum class ButtonVariant { PRIMARY, DISCONNECT }
+
+/**
+ * Slim shared top bar — mirrors the WARP header: brand mark, "SwiftSSTP"
+ * wordmark with the "SSTP client" caption, and the status `.pill` on the
+ * right. Navigation moved to the bottom bar, so this is one row only.
+ */
+@Composable
+fun SwiftSSTPTopBar(
+    state: VpnController.State,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier.fillMaxWidth().background(FieldBackground)) {
+        // Edge-to-edge: Scaffold does not pad custom topBar composables, so
+        // the brand row must apply the status-bar inset itself the way
+        // Material3 TopAppBar does — otherwise it slides under the system
+        // status bar.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Image(
+                painter = painterResource(R.drawable.ic_brand_mark),
+                contentDescription = null,
+                modifier = Modifier.size(22.dp),
+            )
+            Spacer(Modifier.width(9.dp))
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    text = "SwiftSSTP",
+                    style = TextStyle(
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.3.sp,
+                    ),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "SSTP client",
+                    style = TextStyle(fontSize = 12.sp),
+                    color = TextMuted,
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            StateChip(state)
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Hairline))
+    }
+}
+
+/**
+ * Bottom navigation — mirrors the WARP app's tab bar: icon + label per tab,
+ * the active one tinted with the accent blue on a faint accent pill.
+ */
+@Composable
+fun SwiftSSTPBottomBar(
+    current: NavTab,
+    onSelect: (NavTab) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    NavigationBar(
+        modifier = modifier.fillMaxWidth(),
+        containerColor = FieldBackground,
+        tonalElevation = 0.dp,
+    ) {
+        TabBarItem(NavTab.HOME, "Home", Icons.Default.Home, current, onSelect)
+        TabBarItem(NavTab.PROFILES, "Profiles", Icons.Default.Person, current, onSelect)
+        TabBarItem(NavTab.STATS, "Stats", AppIcons.BarChart, current, onSelect)
+        TabBarItem(NavTab.LOG, "Log", AppIcons.Terminal, current, onSelect)
+    }
+}
+
+@Composable
+private fun RowScope.TabBarItem(
+    tab: NavTab,
+    label: String,
+    icon: ImageVector,
+    current: NavTab,
+    onSelect: (NavTab) -> Unit,
+) {
+    val active = current == tab
+    NavigationBarItem(
+        selected = active,
+        onClick = { onSelect(tab) },
+        icon = {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                modifier = Modifier.size(22.dp),
+            )
+        },
+        label = { Text(label, style = MaterialTheme.typography.labelMedium) },
+        colors = NavigationBarItemDefaults.colors(
+            selectedIconColor = AccentBlue,
+            selectedTextColor = AccentBlue,
+            unselectedIconColor = TextMuted,
+            unselectedTextColor = TextMuted,
+            indicatorColor = AccentBlue.copy(alpha = 0.14f),
+        ),
+    )
+}
+
+/**
+ * The one scaffold every root tab shares: slim brand top bar, the bottom
+ * navigation, and the tab's own content between them. The profile editor is a
+ * pushed screen and keeps its own top bar instead.
+ */
+@Composable
+fun AppScaffold(
+    state: VpnController.State,
+    current: NavTab,
+    onTab: (NavTab) -> Unit,
+    content: @Composable (PaddingValues) -> Unit,
+) {
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = { SwiftSSTPTopBar(state) },
+        bottomBar = { SwiftSSTPBottomBar(current, onTab) },
+        content = content,
+    )
+}
+
+/** Small uppercase caption above a group of fields — Windows `.field-label`. */
 @Composable
 fun SectionLabel(text: String) {
     Text(
@@ -53,57 +224,63 @@ fun SectionLabel(text: String) {
     )
 }
 
-/** A titled card that groups related controls. */
+/**
+ * A titled card that groups related controls — mirrors the Windows `.card`
+ * (vertical `--card-2` → `--card` gradient, 1px `--border`, 14px radius,
+ * uppercase 13sp `.card h3` header with an optional muted trailing slot).
+ */
 @Composable
 fun SectionCard(
     title: String? = null,
     modifier: Modifier = Modifier,
+    trailing: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    val shape = RoundedCornerShape(14.dp)
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(8.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
+            .background(Brush.verticalGradient(listOf(Surface2, Surface1)), shape)
+            .border(1.dp, Hairline, shape),
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(18.dp)) {
             if (title != null) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 12.dp),
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = title.uppercase(),
+                        style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium),
+                        letterSpacing = 0.8.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    trailing?.invoke()
+                }
             }
             content()
         }
     }
 }
 
-/** Rounded tonal pill for a TLS mode. */
+/** TLS mode tag — mirrors Windows `tlsTag()` (`.tag.ok` / `.tag.warn`). */
 @Composable
 fun TlsChip(mode: String, modifier: Modifier = Modifier) {
-    val (label, fg, bg) = when (mode) {
-        Profile.TLS_VERIFY -> Triple("VERIFY", AccentBlue, AccentBlue.copy(alpha = 0.14f))
-        Profile.TLS_CUSTOM_CA -> Triple("CUSTOM CA", Amber, Amber.copy(alpha = 0.14f))
-        else -> Triple("INSECURE", Rose, Rose.copy(alpha = 0.14f))
+    val (label, color) = when (mode) {
+        Profile.TLS_VERIFY -> "TLS verify" to Mint
+        Profile.TLS_CUSTOM_CA -> "TLS custom CA" to Mint
+        else -> "TLS insecure" to Amber
     }
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(7.dp),
-        color = bg,
-        contentColor = fg,
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
-        )
-    }
+    InfoChip(label, color, modifier)
 }
 
-/** Connection state pill: dot + label, colour carried by the state. */
+/**
+ * Status pill for the top bar — mirrors Windows `.pill[data-state]`:
+ * uppercase, letter-spaced, 999px radius, tinted background *and* border,
+ * breathing while the tunnel is being established.
+ */
 @Composable
 fun StateChip(state: VpnController.State, modifier: Modifier = Modifier) {
     val (label, color) = when (state) {
@@ -113,104 +290,213 @@ fun StateChip(state: VpnController.State, modifier: Modifier = Modifier) {
         VpnController.State.ERROR -> "ERROR" to Rose
         VpnController.State.DISCONNECTED -> "DISCONNECTED" to TextMuted
     }
+    val busy = state == VpnController.State.CONNECTING || state == VpnController.State.RECONNECTING
+    val transition = rememberInfiniteTransition(label = "state-pill")
+    val pulse by transition.animateFloat(
+        initialValue = 1f,
+        targetValue = 0.55f,
+        animationSpec = infiniteRepeatable(tween(600), RepeatMode.Reverse),
+        label = "state-pill-alpha",
+    )
     Surface(
-        modifier = modifier,
+        modifier = modifier.alpha(if (busy) pulse else 1f),
         shape = RoundedCornerShape(999.dp),
         color = color.copy(alpha = 0.13f),
         contentColor = color,
+        border = BorderStroke(1.dp, color.copy(alpha = 0.5f)),
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(7.dp),
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(7.dp)
-                    .background(color, CircleShape),
-            )
-            Text(text = label, style = MaterialTheme.typography.labelSmall)
-        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.4.sp,
+            ),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+        )
     }
 }
 
 /**
- * Tonal pill for a secondary fact about the connection — tunnel count,
- * upstream proxy, anything the user should see at a glance.
+ * Tonal tag for a fact about a profile or the connection — mirrors the
+ * Windows `.tag` family (`.tag.warn` amber, `.tag.ok` green).
  */
 @Composable
 fun InfoChip(text: String, color: Color, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(999.dp),
-        color = color.copy(alpha = 0.13f),
+        color = color.copy(alpha = 0.14f),
         contentColor = color,
+        border = BorderStroke(1.dp, color.copy(alpha = 0.4f)),
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.2.sp,
+            ),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
         )
     }
 }
 
-/** A compact "label over value" statistic cell. */
+/**
+ * "Label — value" line with a dashed hairline underneath — mirrors the
+ * Windows `.stat-row`.
+ */
 @Composable
-fun StatCell(
+fun StatRow(
     label: String,
     value: String,
-    sub: String? = null,
-    valueColor: Color = MaterialTheme.colorScheme.onSurface,
     modifier: Modifier = Modifier,
+    valueColor: Color = TextPrimary,
+    mono: Boolean = false,
+    showDivider: Boolean = true,
 ) {
-    Column(modifier) {
-        Text(
-            text = label.uppercase(),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleMedium,
-            color = valueColor,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        if (sub != null) {
+    Column(modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
             Text(
-                text = sub,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextMuted,
+                modifier = Modifier.padding(end = 12.dp),
+            )
+            Text(
+                text = value.ifBlank { "—" },
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = if (mono) FontFamily.Monospace else FontFamily.SansSerif,
+                ),
+                color = valueColor,
+                textAlign = TextAlign.End,
+                modifier = Modifier.weight(1f),
             )
         }
+        if (showDivider) DashedRule()
     }
 }
 
-/** Monospace, copy-friendly technical value (fingerprints, addresses). */
+/** The `1px dashed rgba(255,255,255,.06)` separator of `.stat-row`. */
 @Composable
-fun MonoLine(value: String, modifier: Modifier = Modifier) {
-    Text(
-        text = value.ifBlank { "—" },
-        style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier,
-    )
-}
-
-@Composable
-fun Divider(modifier: Modifier = Modifier) {
+private fun DashedRule() {
     Box(
-        modifier
+        Modifier
             .fillMaxWidth()
             .height(1.dp)
-            .background(MaterialTheme.colorScheme.outlineVariant),
+            .drawBehind {
+                drawLine(
+                    color = Color.White.copy(alpha = 0.06f),
+                    start = Offset(0f, size.height / 2f),
+                    end = Offset(size.width, size.height / 2f),
+                    strokeWidth = 1.dp.toPx(),
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f)),
+                )
+            },
     )
 }
 
+/**
+ * The one gradient action button — mirrors Windows `.btn-primary` (blue →
+ * violet, white bold label, glow) and, as [ButtonVariant.DISCONNECT], its
+ * red `.disconnect` sibling; [busy] reproduces `.btn-primary.busy` (dimmed,
+ * still tappable — it is the Stop button).
+ */
 @Composable
-fun HGap(dp: Int) = Spacer(Modifier.width(dp.dp))
+fun GradientButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    variant: ButtonVariant = ButtonVariant.PRIMARY,
+    busy: Boolean = false,
+    enabled: Boolean = true,
+    height: Dp = 56.dp,
+    fontSize: TextUnit = 16.sp,
+) {
+    val shape = RoundedCornerShape(12.dp)
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val dim = (if (busy) 0.78f else 1f) * (if (pressed) 0.92f else 1f)
+    val (start, end) = when (variant) {
+        ButtonVariant.PRIMARY -> AccentBlue to AccentViolet
+        ButtonVariant.DISCONNECT -> Color(0xFFFF5F6D) to Color(0xFFFF2D55)
+    }
+    val glow = if (variant == ButtonVariant.PRIMARY) AccentBlue else Color(0xFFFF2D55)
+    Box(
+        modifier = modifier
+            .height(height)
+            .shadow(if (enabled) 10.dp else 0.dp, shape, ambientColor = glow, spotColor = glow)
+            .clip(shape)
+            .background(Brush.horizontalGradient(listOf(start.copy(alpha = dim), end.copy(alpha = dim))))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                enabled = enabled,
+                onClick = onClick,
+            )
+            .padding(horizontal = 24.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            color = Color.White.copy(alpha = if (enabled) 1f else 0.5f),
+            style = TextStyle(fontSize = fontSize, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.3.sp),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/**
+ * Outline button — mirrors Windows `.btn-ghost` (transparent, 1px
+ * `--border-2`, muted bold label, accent border on interaction).
+ */
+@Composable
+fun GhostButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    contentColor: Color = TextMuted,
+    height: Dp = 34.dp,
+    fontSize: TextUnit = 13.sp,
+) {
+    val shape = RoundedCornerShape(9.dp)
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val borderColor = if (pressed && enabled) AccentBlue else Hairline2
+    val color = when {
+        !enabled -> contentColor.copy(alpha = 0.4f)
+        pressed -> TextPrimary
+        else -> contentColor
+    }
+    Box(
+        modifier = modifier
+            .height(height)
+            .clip(shape)
+            .background(Color.Transparent)
+            .border(1.dp, borderColor, shape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                enabled = enabled,
+                onClick = onClick,
+            )
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            color = color,
+            style = TextStyle(fontSize = fontSize, fontWeight = FontWeight.Bold, letterSpacing = 0.2.sp),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}

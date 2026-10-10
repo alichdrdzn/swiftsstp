@@ -1,4 +1,4 @@
-package com.sstpflash.client
+package com.swiftsstp.client
 
 import android.Manifest
 import android.app.Activity
@@ -24,11 +24,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
-import com.sstpflash.client.model.Profile
-import com.sstpflash.client.ui.ConnectionScreen
-import com.sstpflash.client.ui.ProfilesScreen
-import com.sstpflash.client.ui.ProfileEditorScreen
-import com.sstpflash.client.ui.SstpflashTheme
+import com.swiftsstp.client.model.Profile
+import com.swiftsstp.client.ui.HomeScreen
+import com.swiftsstp.client.ui.LogScreen
+import com.swiftsstp.client.ui.NavTab
+import com.swiftsstp.client.ui.ProfilesScreen
+import com.swiftsstp.client.ui.ProfileEditorScreen
+import com.swiftsstp.client.ui.StatsScreen
+import com.swiftsstp.client.ui.SwiftSSTPTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,7 +39,7 @@ class MainActivity : ComponentActivity() {
         AppModel.init(this)
         enableEdgeToEdge()
         setContent {
-            SstpflashTheme {
+            SwiftSSTPTheme {
                 App()
             }
         }
@@ -90,23 +93,62 @@ private fun App() {
         }
     }
 
-    BackHandler(enabled = screen !is Screen.Profiles) {
+    // The bottom bar switches between the four root tabs; the system back
+    // gesture only has somewhere to go from the editor.
+    val openTab: (NavTab) -> Unit = {
+        AppModel.screen.value = when (it) {
+            NavTab.HOME -> Screen.Home
+            NavTab.PROFILES -> Screen.Profiles
+            NavTab.STATS -> Screen.Stats
+            NavTab.LOG -> Screen.Log
+        }
+    }
+
+    BackHandler(enabled = screen is Screen.Editor) {
         AppModel.screen.value = Screen.Profiles
     }
 
     when (val current = screen) {
+        is Screen.Home -> HomeScreen(
+            profiles = profiles,
+            selectedId = selectedId,
+            vpn = vpn,
+            onSelect = { AppModel.selectedId.value = it.id },
+            onConnect = connect,
+            onDisconnect = { VpnController.stop() },
+            onNewProfile = { AppModel.screen.value = Screen.Editor(null) },
+            onTab = openTab,
+        )
+
         is Screen.Profiles -> ProfilesScreen(
             profiles = profiles,
             usage = usage,
+            state = vpn.state,
             onAdd = { AppModel.screen.value = Screen.Editor(null) },
             onEdit = { AppModel.screen.value = Screen.Editor(it.id) },
             onDuplicate = { AppModel.duplicate(it.id) },
             onDelete = { pendingDelete = it },
+            // "Use" only selects: the single connect control lives on the
+            // Home tab.
             onUse = { profile ->
                 AppModel.selectedId.value = profile.id
-                AppModel.screen.value = Screen.Connection
-                connect(profile)
+                AppModel.screen.value = Screen.Home
             },
+            onTab = openTab,
+        )
+
+        is Screen.Stats -> StatsScreen(
+            profiles = profiles,
+            selectedId = selectedId,
+            usage = usage,
+            vpn = vpn,
+            onTab = openTab,
+        )
+
+        is Screen.Log -> LogScreen(
+            state = vpn.state,
+            log = log,
+            onTab = openTab,
         )
 
         is Screen.Editor -> {
@@ -121,17 +163,6 @@ private fun App() {
             )
         }
 
-        is Screen.Connection -> ConnectionScreen(
-            profiles = profiles,
-            selectedId = selectedId,
-            usage = usage,
-            vpn = vpn,
-            log = log,
-            onSelect = { AppModel.selectedId.value = it.id },
-            onConnect = connect,
-            onDisconnect = { VpnController.stop() },
-            onNewProfile = { AppModel.screen.value = Screen.Editor(null) },
-        )
     }
 
     pendingDelete?.let { target ->
