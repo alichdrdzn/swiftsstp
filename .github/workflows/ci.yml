@@ -78,7 +78,13 @@ jobs:
           java-version: "17"
       # Puts sdkmanager on PATH and accepts the SDK licenses; the runner's
       # preinstalled SDK does not expose the command-line tools by itself.
+      # Override `packages`: the default is "tools platform-tools", but the
+      # legacy `tools` package no longer exists in Google's repository, so
+      # sdkmanager exits 1 ("Failed to find package 'tools'") and the step
+      # fails. Everything else is installed by the explicit step below.
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
       - name: Install Android packages (NDK, platform, build-tools)
         run: sdkmanager "ndk;27.2.12479018" "platforms;android-35" "build-tools;35.0.0"
       - name: Install gomobile + gobind (pinned to go.mod's x/mobile)
