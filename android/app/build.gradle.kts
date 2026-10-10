@@ -52,6 +52,10 @@ android {
                 signingConfigs.create("release") {
                     val decoded = Base64.getDecoder().decode(releaseKeystoreB64)
                     val ksFile = File(project.layout.buildDirectory.get().asFile, "release.keystore")
+                    // This runs at Gradle's CONFIGURATION phase, before any
+                    // task creates android/app/build/ — on a fresh checkout
+                    // the parent dir does not exist yet, so writeBytes fails.
+                    ksFile.parentFile.mkdirs()
                     ksFile.writeBytes(decoded)
                     storeFile = ksFile
                     storePassword = System.getenv("SIGNING_KEYSTORE_PASSWORD")
