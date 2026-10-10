@@ -102,9 +102,22 @@ jobs:
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
+          set -o pipefail
+          # Report which signing inputs CI sees (values stay masked).
+          echo "keystore set: ${SIGNING_KEYSTORE_BASE64:+yes}${SIGNING_KEYSTORE_BASE64:-no}" \
+            >> "$GITHUB_STEP_SUMMARY"
           VER=${GITHUB_REF_NAME#v}
           VC=$(( $(date +%s) / 86400 ))
-          ./gradlew assembleRelease --console=plain -PversionName="$VER" -PversionCode="$VC"
+          rc=0
+          ./gradlew assembleRelease --console=plain -PversionName="$VER" -PversionCode="$VC" \
+            2>&1 | tee /tmp/gradle-release.log || rc=$?
+          if [ "$rc" -ne 0 ]; then
+            { echo "### assembleRelease failed (rc=$rc)"; echo '```'
+              tail -n 40 /tmp/gradle-release.log; echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error title=gradle-release::$(tail -n 25 /tmp/gradle-release.log | tr '\n' '|' | cut -c1-1500)"
+            exit 1
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: android-apk
