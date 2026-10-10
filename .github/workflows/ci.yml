@@ -100,9 +100,8 @@ jobs:
           SDK="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
           export ANDROID_NDK_HOME="$SDK/ndk/27.2.12479018"
           {
-            echo "go: $(go version)"; echo "javac: $(javac -version 2>&1)"
-            echo "JAVA_HOME=$JAVA_HOME"; echo "SDK=$SDK"
-            ls "$SDK/platforms"; df -h /
+            echo "go: $(go version); javac: $(javac -version 2>&1); JAVA_HOME=$JAVA_HOME"
+            echo "platforms: $(ls "$SDK/platforms" | tr '\n' ' ')"; df -h /
           } 2>&1 | tee /tmp/aar-build.log
           rc=0
           gomobile bind -target=android -androidapi 26 -javapkg swiftsstp \
@@ -110,9 +109,12 @@ jobs:
             2>&1 | tee -a /tmp/aar-build.log || rc=$?
           if [ "$rc" -ne 0 ]; then
             # Job logs need auth to read; surface the failure via the
-            # PUBLIC annotations channel instead.
-            head -n 5 /tmp/aar-build.log | sed 's/^/::error title=aar-bind::/'
-            tail -n 8 /tmp/aar-build.log | sed 's/^/::error title=aar-bind::/'
+            # PUBLIC annotations channel instead. GitHub caps annotations
+            # at 10 per step, so emit ONE combined line.
+            { echo "### gomobile bind failed (rc=$rc)"; echo '```'
+              tail -n 40 /tmp/aar-build.log; echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error title=aar-bind::$(tail -n 25 /tmp/aar-build.log | tr '\n' '|' | cut -c1-1500)"
             exit 1
           fi
       - uses: gradle/actions/setup-gradle@v4
@@ -124,9 +126,10 @@ jobs:
           ./gradlew assembleDebug --console=plain 2>&1 | tee /tmp/gradle.log || rc=$?
           if [ "$rc" -ne 0 ]; then
             # Job logs are auth-gated; surface the failure publicly.
-            grep -E "What went wrong|Caused by|FAILURE:|error:|e: |Execution failed" -A2 /tmp/gradle.log \
-              | head -n 12 | sed 's/^/::error title=gradle::/'
-            tail -n 8 /tmp/gradle.log | sed 's/^/::error title=gradle::/'
+            { echo "### assembleDebug failed (rc=$rc)"; echo '```'
+              tail -n 40 /tmp/gradle.log; echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error title=gradle::$(tail -n 25 /tmp/gradle.log | tr '\n' '|' | cut -c1-1500)"
             exit 1
           fi
       - uses: actions/upload-artifact@v4
