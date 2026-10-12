@@ -7,7 +7,7 @@ Android and Windows, built around a single portable Go engine.
 
 ## Overview
 
-SwiftSSTP establishes SSTP tunnels — PPP over HTTP over TLS — without
+SwiftSSTP establishes SSTP tunnels (PPP over HTTP over TLS) without
 depending on any platform's built-in client, so connection behavior is
 consistent across both supported operating systems and every protocol
 option is available per profile.
@@ -18,7 +18,7 @@ option is available per profile.
   the tunnel as local SOCKS5 and HTTP proxy endpoints for applications
   that support proxy configuration (Windows).
 - **Certificate handling**: validate against the system trust store, pin a
-  private CA bundle, or accept self-signed server certificates — selected
+  private CA bundle, or accept self-signed server certificates, chosen
   per profile. Inner PPP authentication (MS-CHAPv2) mutually
   authenticates the peers regardless of the TLS verification mode.
 - **Per-profile configuration**: server host and port, TLS SNI override,
@@ -31,7 +31,7 @@ option is available per profile.
   lifetime totals for every profile.
 - **Diagnostics**: connection log, negotiated endpoint details, and the
   server certificate's SHA-256 fingerprint for out-of-band verification.
-- **Interface**: dark theme with a tabbed layout on both platforms —
+- **Interface**: dark theme with a tabbed layout on both platforms:
   connection control and the current public address on the home tab,
   with profiles, statistics, and logs each in their own tab.
 
@@ -65,12 +65,12 @@ go build ./cmd/sstpcli
 # Windows client (cross-compiles from Linux and macOS)
 cd windows && wails build -platform windows/amd64
 
-# Android — bind the Go engine (not committed; rebuilt on each machine)
+# Android: bind the Go engine (not committed; rebuilt on each machine)
 ANDROID_HOME=/path/to/sdk gomobile bind -target=android -androidapi 26 \
   -javapkg swiftsstp -ldflags='-s -w' -trimpath \
   -o android/app/libs/mobile.aar ./mobile
 
-# Android — build the application
+# Android: build the application
 cd android && ./gradlew assembleDebug      # or assembleRelease
 ```
 
@@ -104,14 +104,14 @@ base64 -w0 swiftsstp.keystore    # value for SIGNING_KEYSTORE_BASE64
 
 | Path | What it is |
 |------|------------|
-| `tunnel/` | The engine: SSTP + PPP (MS-CHAPv2/MPPE) with a packet-level API (ReadIP/WriteIP) — feeds a VpnService TUN, a Wintun adapter, or a netstack proxy |
-| `internal/` | Vendored protocol stack (PPP, MS-CHAPv2/MPPE, SSTP wire, crypto binding), derived from the MIT-licensed veepin project — see `NOTICE` |
+| `tunnel/` | The engine: SSTP + PPP (MS-CHAPv2/MPPE) with a packet-level API (ReadIP/WriteIP): feeds a VpnService TUN, a Wintun adapter, or a netstack proxy |
+| `internal/` | Vendored protocol stack (PPP, MS-CHAPv2/MPPE, SSTP wire, crypto binding), derived from the MIT-licensed veepin project; see `NOTICE` |
 | `mobile/` | gomobile wrapper exposing the engine to the Android app |
 | `android/` | Kotlin + Jetpack Compose app (VpnService, per-app rules, Material 3 dark UI) |
 | `windows/` | Wails desktop app (Wintun full-tunnel + gVisor netstack proxy mode, vanilla-JS frontend embedded via go:embed) |
 | `reconnect/` | Auto-reconnect manager with exponential backoff |
 | `usage/` | Persistent per-profile traffic counters |
-| `cmd/sstpcli/` | Reference CLI client (Linux TUN backend) — the interop test bed |
+| `cmd/sstpcli/` | Reference CLI client (Linux TUN backend); the interop test bed |
 | `docs/` | Shared contracts (`PROFILE_SCHEMA.md`) and logo sources (`logo/`) |
 
 ## Interop status
@@ -130,4 +130,4 @@ checks.
 
 ## License
 
-[MIT](LICENSE) — see `NOTICE` for third-party attribution.
+[MIT](LICENSE); see `NOTICE` for third-party attribution.
