@@ -1,5 +1,6 @@
-// Package store persists profiles.json (+ opens usage-stats.json) in the
-// location from docs/PROFILE_SCHEMA.md: %APPDATA%\SwiftSSTP on Windows,
+// Package store persists profiles.json and settings.json (+ opens
+// usage-stats.json) in the location from docs/PROFILE_SCHEMA.md:
+// %APPDATA%\SwiftSSTP on Windows,
 // $SWIFTSSTP_HOME or ~/.config/SwiftSSTP elsewhere (dev/test).
 //
 // Users upgrading from the pre-rename SSTPflash builds are migrated on
@@ -10,6 +11,7 @@
 package store
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -110,7 +112,16 @@ func List() ([]engine.Profile, error) {
 	return f.Profiles, nil
 }
 
-// Save writes the whole profile list atomically.
+// movedSettingsKeys are the app-wide fields that now live in
+// settings.json (docs/PROFILE_SCHEMA.md); writers must not put them back
+// into profiles.json.
+var movedSettingsKeys = []string{
+	"mtu", "ipv4_enabled", "ipv6_enabled", "dns_override",
+	"auto_reconnect", "proxy", "tunnels",
+}
+
+// Save writes the whole profile list atomically, without the moved
+// app-wide keys (see marshalProfiles).
 func Save(profiles []engine.Profile) error {
 	mu.Lock()
 	defer mu.Unlock()
@@ -122,7 +133,7 @@ func Save(profiles []engine.Profile) error {
 	if f.Profiles == nil {
 		f.Profiles = []engine.Profile{}
 	}
-	b, err := json.MarshalIndent(&f, "", "  ")
+	b, err := marshalProfiles(&f)
 	if err != nil {
 		return err
 	}
@@ -131,6 +142,39 @@ func Save(profiles []engine.Profile) error {
 		return err
 	}
 	return os.Rename(tmp, path)
+}
+
+// marshalProfiles renders profiles.json with the moved settings keys
+// stripped from every entry, so the file converges on the documented
+// shape even when an older profiles.json is read and re-saved. This is
+// only about what gets written: readers already treat those leftovers as
+// stale (List decodes them into the struct fields, which connect always
+// overwrites from settings.json before dialing).
+func marshalProfiles(f *engine.ProfilesFile) ([]byte, error) {
+	raw, err := json.Marshal(f)
+	if err != nil {
+		return nil, err
+	}
+	// Round-trip through a generic document so each profile entry is a
+	// map we can prune. UseNumber keeps integers exact on the way out.
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var doc map[string]any
+	if err := dec.Decode(&doc); err != nil {
+		return nil, err
+	}
+	if list, ok := doc["profiles"].([]any); ok {
+		for _, entry := range list {
+			m, ok := entry.(map[string]any)
+			if !ok {
+				continue
+			}
+			for _, k := range movedSettingsKeys {
+				delete(m, k)
+			}
+		}
+	}
+	return json.MarshalIndent(&doc, "", "  ")
 }
 
 // Upsert inserts or replaces a profile by ID (assigning an ID if empty).

@@ -18,24 +18,33 @@
       </div>
       <div class="topbar-right">
         <!-- Orange badge: appears only after a manual check found an
-             update; tapping it re-checks (Home hides the top bar, so the
-             Home row carries that job there). -->
-        <span class="pill pill-update hidden" id="update-pill" title="Check for updates">update</span>
+             update; tapping it jumps to Settings, where the offer card
+             (and the only control that ever starts a check) lives. -->
+        <span class="pill pill-update hidden" id="update-pill" title="Open Settings">update</span>
         <span class="pill" id="status-pill" data-state="disconnected">disconnected</span>
       </div>
     </header>
 
     <main>
-      <!-- ================= HOME (hero → badge → toggle → status → IP → update → mode) ==== -->
+      <!-- ================= HOME (hero → badge → toggle → status → IP → mode) ==== -->
       <section id="view-home" class="view">
         <div class="home-stack">
           <!-- 1. hero wordmark — the branding on Home (top bar is hidden) -->
           <div class="hero-brand" aria-hidden="true">SwiftSSTP</div>
 
-          <!-- 2. profile badge (label kept for screen readers only) -->
-          <div class="home-profile">
-            <label class="visually-hidden" for="conn-profile">Profile</label>
-            <select id="conn-profile" class="input select profile-pill"></select>
+          <!-- 2. profile picker (label kept for screen readers only).
+               A custom dropdown, not a native <select>: the OS draws the
+               option popup at content width and ignores the pill. The
+               list is anchored to the trigger at width:100%, so list and
+               trigger are the same size by construction. It only picks a
+               profile — the toggle below is the one connect control. -->
+          <div class="home-profile profile-dropdown" id="conn-profile">
+            <label class="visually-hidden" for="conn-profile-trigger">Profile</label>
+            <button type="button" class="input profile-pill" id="conn-profile-trigger"
+                    aria-haspopup="listbox" aria-expanded="false" aria-controls="conn-profile-menu">
+              <span class="profile-pill-label" id="conn-profile-label">—</span>
+            </button>
+            <ul class="profile-menu hidden" id="conn-profile-menu" role="listbox" aria-label="Profile"></ul>
           </div>
 
           <!-- 3. pill toggle — the ONLY connect/disconnect control. State is
@@ -57,38 +66,6 @@
             <div class="ip-row">
               <span class="ip-flag hidden" id="ip-flag"></span>
               <span class="ip-value mono" id="ip-value">—</span>
-            </div>
-          </div>
-
-          <!-- 5b. manual update check — permanent row: running version on
-               the left, ghost button on the right. This button (and the
-               top-bar pill, once shown) are the ONLY things that ever call
-               update_check: no launch check, no timer. A "dev" build shows
-               its note and never asks. -->
-          <div class="update-check">
-            <div class="update-check-row">
-              <span class="update-check-ver" id="update-check-ver">—</span>
-              <button class="btn-ghost" id="btn-check-update" type="button" disabled>Check for updates</button>
-            </div>
-            <!-- outcome line: "up to date" (self-clearing), an honest
-                 network error, or the local-build note. -->
-            <div class="update-status muted hidden" id="update-status"></div>
-          </div>
-
-          <!-- 5c. update card (stable channel) — same wording and badge
-               position as the Android shell; hidden until a manual check
-               reports one. Install → download (bytes shown) → confirm the
-               replace-and-restart; the backend never swaps the exe unasked. -->
-          <div class="card update-card hidden" id="update-card">
-            <div class="update-row">
-              <span class="update-ver" id="update-ver">update available</span>
-              <button class="btn-primary btn-update" id="btn-update-install" type="button">Install</button>
-            </div>
-            <div class="update-msg hidden" id="update-msg"></div>
-            <div class="btn-row hidden" id="update-actions">
-              <button class="btn-ghost" id="btn-update-later" type="button">Later</button>
-              <button class="btn-ghost" id="btn-update-retry" type="button">Retry</button>
-              <button class="btn-ghost" id="btn-update-page" type="button">Open release page</button>
             </div>
           </div>
 
@@ -236,39 +213,93 @@
               <label class="field-label" for="f-ca">CA bundle path (PEM)</label>
               <input class="input" id="f-ca" type="text" placeholder="C:\certs\myca.pem">
             </div>
-
-            <label class="field-label" for="f-mtu">MTU (0 = engine default 1400)</label>
-            <input class="input" id="f-mtu" type="number" min="0" max="1500" value="0">
-
-            <div class="switch-row">
-              <label class="switch"><input type="checkbox" id="f-ipv4" checked><span></span> IPv4</label>
-              <label class="switch"><input type="checkbox" id="f-ipv6"><span></span> IPv6</label>
-            </div>
-
-            <label class="field-label" for="f-dns">DNS override (one IP per line, empty = server DNS)</label>
-            <textarea class="input textarea mono" id="f-dns" rows="3" placeholder="1.1.1.1"></textarea>
+            <!-- MTU / address families / DNS moved to Settings: they are
+                 app-wide now (docs/PROFILE_SCHEMA.md settings.json). -->
           </div>
+
+          <!-- Auto-reconnect, Upstream proxy and Tunnels moved to the
+               Settings tab: they are app-wide now. -->
 
           <div class="card">
-            <h3>Auto-reconnect</h3>
-            <div class="switch-row">
-              <label class="switch"><input type="checkbox" id="f-reconnect" checked><span></span> Reconnect automatically</label>
-            </div>
+            <h3>Local proxy (proxy mode)</h3>
             <div class="field-pair">
               <div>
-                <label class="field-label" for="f-backoff-init">Initial backoff (ms)</label>
-                <input class="input" id="f-backoff-init" type="number" min="100" value="1000">
+                <label class="field-label" for="f-socks">SOCKS5 port</label>
+                <input class="input" id="f-socks" type="number" min="1" max="65535" value="10808">
               </div>
               <div>
-                <label class="field-label" for="f-backoff-max">Max backoff (ms)</label>
-                <input class="input" id="f-backoff-max" type="number" min="1000" value="30000">
+                <label class="field-label" for="f-http">HTTP port</label>
+                <input class="input" id="f-http" type="number" min="1" max="65535" value="10809">
               </div>
             </div>
-            <div class="muted" style="font-size:12px">
-              Stops permanently on rejected credentials (auth errors are not retried).
+            <div class="switch-row">
+              <label class="switch"><input type="checkbox" id="f-sysproxy"><span></span> Set Windows system proxy while connected</label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= SETTINGS (app-wide; docs/PROFILE_SCHEMA.md
+           settings.json). Card order mirrors the Android shell. -->
+      <section id="view-settings" class="view hidden">
+        <div class="list-head">
+          <h2>Settings</h2>
+          <button class="btn-primary" id="btn-save-settings" type="button">Save</button>
+        </div>
+        <div class="grid editor-grid">
+
+          <!-- 1. UPDATES — same wording and badge position as the Android
+               shell. The button here (and the top-bar pill, which only
+               navigates here) are the ONLY things that ever call
+               update_check: no launch check, no timer. A "dev" build
+               shows its note and never asks. -->
+          <div class="card">
+            <h3>Updates</h3>
+            <div class="update-check">
+              <div class="update-check-row">
+                <span class="update-check-ver" id="update-check-ver">—</span>
+                <button class="btn-ghost" id="btn-check-update" type="button" disabled>Check for updates</button>
+              </div>
+              <!-- outcome line: "up to date" (self-clearing), an honest
+                   network error, or the local-build note. -->
+              <div class="update-status muted hidden" id="update-status"></div>
+            </div>
+            <!-- update card (stable channel) — hidden until a manual
+                 check reports one. Install → download (bytes shown) →
+                 confirm the replace-and-restart; the backend never swaps
+                 the exe unasked. -->
+            <div class="card update-card hidden" id="update-card">
+              <div class="update-row">
+                <span class="update-ver" id="update-ver">update available</span>
+                <button class="btn-primary btn-update" id="btn-update-install" type="button">Install</button>
+              </div>
+              <div class="update-msg hidden" id="update-msg"></div>
+              <div class="btn-row hidden" id="update-actions">
+                <button class="btn-ghost" id="btn-update-later" type="button">Later</button>
+                <button class="btn-ghost" id="btn-update-retry" type="button">Retry</button>
+                <button class="btn-ghost" id="btn-update-page" type="button">Open release page</button>
+              </div>
             </div>
           </div>
 
+          <!-- 2. TUNNELS -->
+          <div class="card">
+            <h3>Tunnels</h3>
+            <label class="field-label" for="f-tunnels">Parallel sessions (1-8)</label>
+            <div class="stepper">
+              <button class="btn-ghost" id="tunnels-dec" type="button" aria-label="Fewer tunnels">−</button>
+              <input class="input stepper-value" id="f-tunnels" type="number" min="1" max="8" value="1">
+              <button class="btn-ghost" id="tunnels-inc" type="button" aria-label="More tunnels">+</button>
+            </div>
+            <div class="muted hint">
+              Opens this many parallel SSTP sessions (each with its own inner
+              IP). Concurrent flows are spread across them for aggregate
+              throughput, and each session redials on its own if it drops.
+              1 = classic single session.
+            </div>
+          </div>
+
+          <!-- 3. UPSTREAM PROXY -->
           <div class="card">
             <h3>Upstream proxy</h3>
             <label class="field-label" for="f-proxy-type">Type</label>
@@ -294,45 +325,46 @@
               </div>
             </div>
             <div class="muted hint">
-              Routes the <b>outer</b> transport of every session of this profile
-              through the proxy: HTTP CONNECT or SOCKS5 to reach the SSTP
-              server, with optional credentials. Leave as None for a direct
-              connection.
+              Routes the <b>outer</b> transport of every session through the
+              proxy: HTTP CONNECT or SOCKS5 to reach the SSTP server, with
+              optional credentials. Leave as None for a direct connection.
             </div>
           </div>
 
+          <!-- 4. NETWORK -->
           <div class="card">
-            <h3>Tunnels</h3>
-            <label class="field-label" for="f-tunnels">Parallel sessions (1-8)</label>
-            <div class="stepper">
-              <button class="btn-ghost" id="tunnels-dec" type="button" aria-label="Fewer tunnels">−</button>
-              <input class="input stepper-value" id="f-tunnels" type="number" min="1" max="8" value="1">
-              <button class="btn-ghost" id="tunnels-inc" type="button" aria-label="More tunnels">+</button>
+            <h3>Network</h3>
+            <label class="field-label" for="f-mtu">MTU (0 = engine default 1400)</label>
+            <input class="input" id="f-mtu" type="number" min="0" max="1500" value="0">
+            <div class="switch-row">
+              <label class="switch"><input type="checkbox" id="f-ipv4" checked><span></span> IPv4</label>
+              <label class="switch"><input type="checkbox" id="f-ipv6"><span></span> IPv6</label>
             </div>
-            <div class="muted hint">
-              Opens this many parallel SSTP sessions (each with its own inner
-              IP). Concurrent flows are spread across them for aggregate
-              throughput, and each session redials on its own if it drops.
-              1 = classic single session.
-            </div>
+            <label class="field-label" for="f-dns">DNS override (one IP per line, empty = server DNS)</label>
+            <textarea class="input textarea mono" id="f-dns" rows="3" placeholder="1.1.1.1"></textarea>
           </div>
 
+          <!-- 5. AUTO-RECONNECT -->
           <div class="card">
-            <h3>Local proxy (proxy mode)</h3>
+            <h3>Auto-reconnect</h3>
+            <div class="switch-row">
+              <label class="switch"><input type="checkbox" id="f-reconnect" checked><span></span> Reconnect automatically</label>
+            </div>
             <div class="field-pair">
               <div>
-                <label class="field-label" for="f-socks">SOCKS5 port</label>
-                <input class="input" id="f-socks" type="number" min="1" max="65535" value="10808">
+                <label class="field-label" for="f-backoff-init">Initial backoff (ms)</label>
+                <input class="input" id="f-backoff-init" type="number" min="100" value="1000">
               </div>
               <div>
-                <label class="field-label" for="f-http">HTTP port</label>
-                <input class="input" id="f-http" type="number" min="1" max="65535" value="10809">
+                <label class="field-label" for="f-backoff-max">Max backoff (ms)</label>
+                <input class="input" id="f-backoff-max" type="number" min="1000" value="30000">
               </div>
             </div>
-            <div class="switch-row">
-              <label class="switch"><input type="checkbox" id="f-sysproxy"><span></span> Set Windows system proxy while connected</label>
+            <div class="muted" style="font-size:12px">
+              Stops permanently on rejected credentials (auth errors are not retried).
             </div>
           </div>
+
         </div>
       </section>
     </main>
@@ -374,6 +406,14 @@
           <path d="M13 15h3.5"></path>
         </svg>
         <span>Log</span>
+      </a>
+      <a href="#/settings" id="nav-settings" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+        <span>Settings</span>
       </a>
     </nav>
 

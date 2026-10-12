@@ -81,24 +81,36 @@ func TestProfileProxyAndTunnels(t *testing.T) {
 		t.Fatalf("new profile got Proxy %+v, want nil", dcfg.Proxy)
 	}
 
-	// Out-of-range / nonsense values are rejected.
+	// The app-wide checks moved to Settings: a profile carrying nonsense
+	// in the moved fields still passes profile validation (connect
+	// applies settings.json on top of it first), and the same nonsense
+	// is rejected by the settings rules instead.
 	q.Tunnels = 9
-	if err := q.Validate(); err == nil {
-		t.Fatal("tunnels=9 should be rejected")
+	if err := q.Validate(); err != nil {
+		t.Fatalf("profile validation must not police moved fields: %v", err)
 	}
-	q.Tunnels = 3
-	q.Proxy.Type = "ftp"
-	if err := q.Validate(); err == nil {
-		t.Fatal("proxy type ftp should be rejected")
+	st := SettingsFrom(q)
+	if err := st.Validate(); err == nil {
+		t.Fatal("settings tunnels=9 should be rejected")
 	}
-	q.Proxy.Type = "http"
-	q.Proxy.Host = ""
-	if err := q.Validate(); err == nil {
-		t.Fatal("proxy without host should be rejected")
+	st.Tunnels = 3
+	st.Proxy.Type = "ftp"
+	if err := st.Validate(); err == nil {
+		t.Fatal("settings proxy type ftp should be rejected")
 	}
-	q.Proxy.Host, q.Proxy.Port = "127.0.0.1", 0
-	if err := q.Validate(); err == nil {
-		t.Fatal("proxy without port should be rejected")
+	st.Proxy.Type = "http"
+	st.Proxy.Host = ""
+	if err := st.Validate(); err == nil {
+		t.Fatal("settings proxy without host should be rejected")
+	}
+	st.Proxy.Host, st.Proxy.Port = "127.0.0.1", 0
+	if err := st.Validate(); err == nil {
+		t.Fatal("settings proxy without port should be rejected")
+	}
+	st = SettingsFrom(q)
+	st.IPv4Enabled, st.IPv6Enabled = false, false
+	if err := st.Validate(); err == nil {
+		t.Fatal("settings without an IP family should be rejected")
 	}
 	// Clamping for values that reach the dial path anyway.
 	q.Proxy = Proxy{}
@@ -109,5 +121,55 @@ func TestProfileProxyAndTunnels(t *testing.T) {
 	q.Tunnels = 99
 	if q.TunnelCount() != 8 {
 		t.Fatalf("tunnels=99 -> %d", q.TunnelCount())
+	}
+}
+
+// TestSettingsApplySplit pins the split behind docs/PROFILE_SCHEMA.md:
+// the app-wide values live in settings.json, and a connect overlays them
+// on the chosen profile (Settings.Apply) before it is validated and
+// dialled. SettingsFrom is the inverse the migration uses.
+func TestSettingsApplySplit(t *testing.T) {
+	p := NewProfile()
+	p.Host, p.Username, p.Password = "h", "u", "p"
+	p.TLSMode = "insecure"
+
+	s := DefaultSettings()
+	if err := s.Validate(); err != nil {
+		t.Fatalf("default settings validate: %v", err)
+	}
+	s.Apply(&p)
+	if p.TunnelCount() != 1 || p.Proxy.Configured() || !p.IPv4Enabled || p.IPv6Enabled {
+		t.Fatalf("defaults applied: tunnels=%d proxy=%+v v4=%v v6=%v",
+			p.TunnelCount(), p.Proxy, p.IPv4Enabled, p.IPv6Enabled)
+	}
+
+	// A non-default set must reach the engine through the same path.
+	s.MTU = 1350
+	s.Tunnels = 4
+	s.IPv6Enabled = true
+	s.DNSOverride = []string{"1.1.1.1"}
+	s.Proxy = Proxy{Type: "http", Host: "proxy.example.com", Port: 3128}
+	if err := s.Validate(); err != nil {
+		t.Fatalf("settings validate: %v", err)
+	}
+	s.Apply(&p)
+	if p.MTU != 1350 || p.TunnelCount() != 4 || !p.IPv6Enabled || len(p.DNSOverride) != 1 {
+		t.Fatalf("applied: %+v", p)
+	}
+	if err := p.Validate(); err != nil {
+		t.Fatalf("profile validate after apply: %v", err)
+	}
+	cfg, err := p.tunnelConfig(func(string, ...any) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.MTU != 1350 || cfg.Proxy == nil || cfg.Proxy.Type != "http" || cfg.Proxy.Port != 3128 {
+		t.Fatalf("cfg = %+v", cfg)
+	}
+
+	back := SettingsFrom(p)
+	if back.MTU != s.MTU || back.Tunnels != s.Tunnels || back.Proxy != s.Proxy ||
+		!back.IPv6Enabled || len(back.DNSOverride) != 1 {
+		t.Fatalf("SettingsFrom/Apply round trip: %+v vs %+v", back, s)
 	}
 }

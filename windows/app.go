@@ -127,6 +127,34 @@ func (a *App) dispatch(action string, args []byte) (any, error) {
 		}
 		return map[string]any{"config_dir": dir, "version": version}, nil
 
+	// ---- settings (app-wide, docs/PROFILE_SCHEMA.md settings.json) ----
+	case "settings_get":
+		// Missing settings.json is migrated on first load.
+		return store.LoadSettings()
+
+	case "settings_save":
+		var in struct {
+			Settings engine.Settings `json:"settings"`
+		}
+		if err := json.Unmarshal(args, &in); err != nil {
+			return nil, err
+		}
+		// These rules moved out of profile save with the fields: the
+		// settings form owns them now.
+		if err := in.Settings.Validate(); err != nil {
+			return nil, err
+		}
+		if err := store.SaveSettings(in.Settings); err != nil {
+			return nil, err
+		}
+		px := in.Settings.Proxy.Label()
+		if px == "" {
+			px = "direct"
+		}
+		a.logf("settings saved: tunnels=%d ipv4=%v ipv6=%v proxy=%s",
+			in.Settings.Tunnels, in.Settings.IPv4Enabled, in.Settings.IPv6Enabled, px)
+		return in.Settings, nil
+
 	// ---- profiles ----
 	case "profiles_list":
 		list, err := store.List()
@@ -145,6 +173,8 @@ func (a *App) dispatch(action string, args []byte) (any, error) {
 		if err := json.Unmarshal(args, &in); err != nil {
 			return nil, err
 		}
+		// Profile-level rules only: the app-wide fields left the editor
+		// and are validated by settings_save instead.
 		if err := in.Profile.Validate(); err != nil {
 			return nil, err
 		}
@@ -214,6 +244,20 @@ func (a *App) dispatch(action string, args []byte) (any, error) {
 		}
 		if found == nil {
 			return nil, fmt.Errorf("profile %s not found", in.ID)
+		}
+		// The tunnel options are app-wide now: overlay settings.json on
+		// the profile before validating, so the editor never has to send
+		// them again.
+		settings, err := store.LoadSettings()
+		if err != nil {
+			return nil, err
+		}
+		if err := settings.Validate(); err != nil {
+			return nil, err
+		}
+		settings.Apply(found)
+		if err := found.Validate(); err != nil {
+			return nil, err
 		}
 		// Restart if something is already up (also covers mode changes).
 		a.mgr.Disconnect()

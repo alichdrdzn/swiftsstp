@@ -94,7 +94,11 @@ func (p Proxy) tunnelProxy() *tunnel.ProxyConfig {
 }
 
 // Profile is one saved server profile (docs/PROFILE_SCHEMA.md v1 plus
-// app-specific extras under Extras).
+// app-specific extras under Extras). The moved app-wide fields (MTU, the
+// address families, DNS, auto-reconnect, upstream proxy, tunnels) are
+// still part of the struct so an old profiles.json can be read and
+// migrated, but they are no longer edited per profile: settings.json
+// owns them and connect Apply's Settings onto the profile first.
 type Profile struct {
 	ID            string         `json:"id"`
 	Name          string         `json:"name"`
@@ -212,7 +216,11 @@ func (p *Profile) SetExtraBool(key string, v bool) {
 	p.Extras[key] = v
 }
 
-// Validate checks the fields the engine needs before dialing.
+// Validate checks the profile-level fields the engine needs before
+// dialing: address, credentials, port and certificate handling. The
+// app-wide checks (IP families, upstream proxy, tunnels) moved to
+// Settings.Validate — connect applies settings.json on top of the
+// profile first, so they are no longer policed here.
 func (p Profile) Validate() error {
 	if p.Host == "" {
 		return fmt.Errorf("profile: host is required")
@@ -222,9 +230,6 @@ func (p Profile) Validate() error {
 	}
 	if p.Port < 0 || p.Port > 65535 {
 		return fmt.Errorf("profile: invalid port")
-	}
-	if !p.IPv4Enabled && !p.IPv6Enabled {
-		return fmt.Errorf("profile: at least one IP family must be enabled")
 	}
 	switch p.TLSMode {
 	case "", "verify", "insecure", "custom_ca":
@@ -238,25 +243,6 @@ func (p Profile) Validate() error {
 		if _, err := os.ReadFile(p.CAPath); err != nil {
 			return fmt.Errorf("profile: read ca file: %w", err)
 		}
-	}
-	// Upstream proxy (optional; absent/empty type = direct).
-	if p.Proxy.Configured() {
-		switch p.Proxy.Type {
-		case "http", "socks5":
-		default:
-			return fmt.Errorf("profile: unknown proxy type %q (want http or socks5)", p.Proxy.Type)
-		}
-		if p.Proxy.Host == "" {
-			return fmt.Errorf("profile: proxy host is required when a proxy type is set")
-		}
-		if p.Proxy.Port < 1 || p.Proxy.Port > 65535 {
-			return fmt.Errorf("profile: invalid proxy port")
-		}
-	}
-	// Tunnels: 0 means "field absent" in profiles saved before multi-tunnel
-	// support, which TunnelCount() treats as the default of 1.
-	if p.Tunnels != 0 && (p.Tunnels < 1 || p.Tunnels > multi.MaxSessions) {
-		return fmt.Errorf("profile: tunnels must be 1..%d", multi.MaxSessions)
 	}
 	return nil
 }

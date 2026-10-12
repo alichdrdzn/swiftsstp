@@ -22,6 +22,7 @@ const state = {
   mode: migratedKey("swiftsstp.mode", "sstpflash.mode") || "proxy",
   selectedProfile: migratedKey("swiftsstp.selectedProfile", "sstpflash.selectedProfile") || "",
   editing: null, // profile object being edited
+  settings: null, // app-wide settings from settings_get / settings_save
   geoip: null,   // last {ip,country,colo} from the geoip action (cached)
   version: "",       // running build version from app_info ("dev" = unstamped)
   update: null,      // {version, size, …} when the stable channel has one
@@ -98,6 +99,7 @@ function route() {
   const isProfiles = hash === "#/profiles";
   const isStats = hash === "#/stats";
   const isLog = hash === "#/log";
+  const isSettings = hash === "#/settings";
   const isHome = hash === "#/" || hash === "";
 
   $("view-home").classList.toggle("hidden", !isHome);
@@ -105,6 +107,7 @@ function route() {
   $("view-stats").classList.toggle("hidden", !isStats);
   $("view-log").classList.toggle("hidden", !isLog);
   $("view-editor").classList.toggle("hidden", !isEditor);
+  $("view-settings").classList.toggle("hidden", !isSettings);
 
   // Home drops the top bar entirely: the hero wordmark is the branding there.
   $("topbar").classList.toggle("hidden", isHome);
@@ -113,11 +116,13 @@ function route() {
   $("nav-profiles").classList.toggle("active", isProfiles || isEditor);
   $("nav-stats").classList.toggle("active", isStats);
   $("nav-log").classList.toggle("active", isLog);
+  $("nav-settings").classList.toggle("active", isSettings);
 
   // The segmented thumb measures the active button; re-measure when the
   // home view becomes visible again (offsetWidth is 0 while hidden).
   if (isHome) {
     requestAnimationFrame(positionThumb);
+    closeProfileMenu(); // never leave the list hanging off a hidden view
     refreshGeo(); // Home shown → refresh the egress IP card
   }
 
@@ -134,26 +139,97 @@ function homeVisible() {
 }
 
 /* ---------------- connection screen ---------------- */
+/* The profile picker is a custom dropdown: a native <select> lets the OS
+ * size the option popup however it likes, which is why it never matched
+ * the pill. The list is absolutely positioned at width:100% of the
+ * trigger, so the two are the same size by construction. Picking an
+ * entry writes state.selectedProfile and its localStorage key — the same
+ * state the old <select>'s "change" listener wrote. */
 function renderProfileSelect() {
-  const sel = $("conn-profile");
-  const cur = state.selectedProfile;
-  sel.innerHTML = "";
+  const menu = $("conn-profile-menu");
+  menu.innerHTML = "";
   if (state.profiles.length === 0) {
-    const o = document.createElement("option");
-    o.value = "";
-    o.textContent = "— no profiles, create one —";
-    sel.appendChild(o);
+    state.selectedProfile = "";
+    localStorage.setItem("swiftsstp.selectedProfile", "");
+    const li = document.createElement("li");
+    li.className = "profile-option";
+    li.setAttribute("role", "option");
+    li.setAttribute("aria-selected", "false");
+    li.setAttribute("aria-disabled", "true");
+    li.textContent = "— no profiles, create one —";
+    menu.appendChild(li);
+    syncProfileSelect();
     return;
   }
-  for (const p of state.profiles) {
-    const o = document.createElement("option");
-    o.value = p.id;
-    o.textContent = `${p.name || "unnamed"} (${p.host}:${p.port || 443})`;
-    sel.appendChild(o);
+  for (let i = 0; i < state.profiles.length; i++) {
+    const p = state.profiles[i];
+    const li = document.createElement("li");
+    li.className = "profile-option";
+    li.id = `conn-profile-opt-${i}`;
+    li.setAttribute("role", "option");
+    li.dataset.id = p.id;
+    const span = document.createElement("span");
+    span.textContent = `${p.name || "unnamed"} (${p.host}:${p.port || 443})`;
+    li.appendChild(span);
+    menu.appendChild(li);
   }
-  if (state.profiles.some(p => p.id === cur)) sel.value = cur;
-  else state.selectedProfile = sel.value;
-  localStorage.setItem("swiftsstp.selectedProfile", state.selectedProfile);
+  // Old behaviour kept: a selection that no longer exists falls back to
+  // the first profile ("" when there are none at all).
+  if (!state.profiles.some(p => p.id === state.selectedProfile)) {
+    state.selectedProfile = state.profiles[0].id;
+    localStorage.setItem("swiftsstp.selectedProfile", state.selectedProfile);
+  }
+  syncProfileSelect();
+}
+
+/* Paint the trigger label and the selected row from state. */
+function syncProfileSelect() {
+  const p = state.profiles.find(x => x.id === state.selectedProfile);
+  $("conn-profile-label").textContent =
+    p ? `${p.name || "unnamed"} (${p.host}:${p.port || 443})` : "— no profiles, create one —";
+  for (const li of $("conn-profile-menu").querySelectorAll(".profile-option")) {
+    li.setAttribute("aria-selected", li.dataset.id === state.selectedProfile ? "true" : "false");
+  }
+}
+
+function profileMenuOpen() {
+  return !$("conn-profile-menu").classList.contains("hidden");
+}
+
+/* Selectable rows only (the empty-state row is not). */
+function profileMenuItems() {
+  return Array.from($("conn-profile-menu").querySelectorAll(".profile-option[role=option]"))
+    .filter(li => li.getAttribute("aria-disabled") !== "true");
+}
+
+let profileActive = -1;
+function setActiveProfileOption(idx) {
+  const items = profileMenuItems();
+  profileActive = (idx >= 0 && idx < items.length) ? idx : -1;
+  items.forEach((li, i) => li.classList.toggle("active", i === profileActive));
+  if (profileActive >= 0) items[profileActive].scrollIntoView({ block: "nearest" });
+}
+
+function openProfileMenu() {
+  $("conn-profile-menu").classList.remove("hidden");
+  $("conn-profile-trigger").setAttribute("aria-expanded", "true");
+  const idx = profileMenuItems().findIndex(li => li.dataset.id === state.selectedProfile);
+  setActiveProfileOption(idx);
+}
+
+function closeProfileMenu() {
+  const menu = $("conn-profile-menu");
+  if (!menu || menu.classList.contains("hidden")) return;
+  menu.classList.add("hidden");
+  $("conn-profile-trigger").setAttribute("aria-expanded", "false");
+  setActiveProfileOption(-1);
+}
+
+/* The old select's "change" handler: pick the profile and remember it. */
+function selectProfile(id) {
+  state.selectedProfile = id;
+  localStorage.setItem("swiftsstp.selectedProfile", id);
+  syncProfileSelect();
 }
 
 function setMode(mode) {
@@ -192,7 +268,12 @@ function renderStatus() {
   const btn = $("btn-connect");
 
   const prof = state.profiles.find(p => p.id === s.profile_id);
-  if (prof) state.selectedProfile = prof.id;
+  if (prof && prof.id !== state.selectedProfile) {
+    // A connect started elsewhere (duplicate, "Use", backend retry):
+    // keep the picker's label on the profile that is actually running.
+    state.selectedProfile = prof.id;
+    syncProfileSelect();
+  }
 
   // The Home pill toggle carries no label text: state is data-state driven
   // (CSS knob position / track colour / border breathe) plus aria-label and
@@ -388,10 +469,10 @@ async function copyIP() {
 
 /* ---------------- update (stable channel, manual only) ----------------
  * Nothing here runs on launch or on a timer: the app never spends the
- * user's network on its own. The only triggers are the Home "Check for
- * updates" row and the orange top-bar pill once it appears. The download
- * still shows bytes/percent and the replace+restart is always confirmed
- * by the user before the backend touches the exe. */
+ * user's network on its own. The only trigger is the Settings tab's
+ * "Check for updates" button (the orange top-bar pill just navigates
+ * there). The download still shows bytes/percent and the replace+restart
+ * is always confirmed by the user before the backend touches the exe. */
 const UPDATE_POLL_MS = 400;
 let updateBusy = false;   // also the "Checking…" guard: a second tap is ignored
 let updatePoll = null;
@@ -597,16 +678,16 @@ function renderProfiles() {
     const card = document.createElement("div");
     card.className = "card profile-card";
     const extras = p.extras || {};
+    // Only per-profile tags left: TLS, username, system proxy. Reconnect,
+    // upstream proxy and tunnel count are app-wide now (Settings owns
+    // them), so they no longer describe one profile.
     card.innerHTML = `
       <div class="p-name">${esc(p.name || "unnamed")}</div>
       <div class="p-host">${esc(p.host)}:${p.port || 443}${p.sni ? " · sni " + esc(p.sni) : ""}</div>
       <div class="p-meta">
         ${tlsTag(p)}
         <span class="tag">${esc(p.username || "—")}</span>
-        ${p.auto_reconnect && p.auto_reconnect.enabled ? '<span class="tag">auto-reconnect</span>' : ""}
         ${extras.system_proxy ? '<span class="tag">system proxy</span>' : ""}
-        ${p.proxy && p.proxy.type ? `<span class="tag warn">proxy ${esc(p.proxy.type)}</span>` : ""}
-        ${(p.tunnels || 1) > 1 ? `<span class="tag ok">${esc(String(p.tunnels))} tunnels</span>` : ""}
       </div>
       <div class="p-actions">
         <button class="btn-ghost" data-act="edit">Edit</button>
@@ -676,8 +757,11 @@ async function openEditor(id) {
   } catch (e) { toast(e.message, true); }
 }
 
+/* The editor only owns what makes a connection to THAT server: address,
+ * credentials, certificate handling and the local proxy ports. The
+ * tunnel options (MTU, families, DNS, reconnect, upstream proxy,
+ * tunnels) live in the Settings view and settings.json. */
 function fillForm(p) {
-  const ar = p.auto_reconnect || {};
   const ex = p.extras || {};
   $("f-name").value = p.name || "";
   $("f-host").value = p.host || "";
@@ -687,30 +771,14 @@ function fillForm(p) {
   $("f-pass").value = p.password || "";
   $("f-tls").value = p.tls_mode || "verify";
   $("f-ca").value = p.ca_path || "";
-  $("f-mtu").value = p.mtu || 0;
-  $("f-ipv4").checked = !!p.ipv4_enabled;
-  $("f-ipv6").checked = !!p.ipv6_enabled;
-  $("f-dns").value = (p.dns_override || []).join("\n");
-  $("f-reconnect").checked = ar.enabled !== false;
-  $("f-backoff-init").value = ar.initial_backoff_ms || 1000;
-  $("f-backoff-max").value = ar.max_backoff_ms || 30000;
   $("f-socks").value = ex.socks_port || 10808;
   $("f-http").value = ex.http_port || 10809;
   $("f-sysproxy").checked = !!ex.system_proxy;
-  const px = p.proxy || {};
-  $("f-proxy-type").value = px.type || "";
-  $("f-proxy-host").value = px.host || "";
-  $("f-proxy-port").value = px.port || 3128;
-  $("f-proxy-user").value = px.username || "";
-  $("f-proxy-pass").value = px.password || "";
-  toggleProxyFields();
-  $("f-tunnels").value = clampTunnels(p.tunnels);
   $("ca-wrap").classList.toggle("hidden", $("f-tls").value !== "custom_ca");
 }
 
 function collectForm() {
   const p = state.editing || {};
-  const dns = $("f-dns").value.split(/[\r\n,]+/).map(s => s.trim()).filter(Boolean);
   return {
     id: p.id || "",
     name: $("f-name").value.trim(),
@@ -721,6 +789,37 @@ function collectForm() {
     password: $("f-pass").value,
     tls_mode: $("f-tls").value,
     ca_path: $("f-ca").value.trim(),
+    extras: {
+      socks_port: parseInt($("f-socks").value, 10) || 10808,
+      http_port: parseInt($("f-http").value, 10) || 10809,
+      system_proxy: $("f-sysproxy").checked,
+    },
+  };
+}
+
+/* ---------------- settings (app-wide) ---------------- */
+function fillSettings(s) {
+  const ar = s.auto_reconnect || {};
+  $("f-mtu").value = s.mtu || 0;
+  $("f-ipv4").checked = !!s.ipv4_enabled;
+  $("f-ipv6").checked = !!s.ipv6_enabled;
+  $("f-dns").value = (s.dns_override || []).join("\n");
+  $("f-reconnect").checked = ar.enabled !== false;
+  $("f-backoff-init").value = ar.initial_backoff_ms || 1000;
+  $("f-backoff-max").value = ar.max_backoff_ms || 30000;
+  const px = s.proxy || {};
+  $("f-proxy-type").value = px.type || "";
+  $("f-proxy-host").value = px.host || "";
+  $("f-proxy-port").value = px.port || 3128;
+  $("f-proxy-user").value = px.username || "";
+  $("f-proxy-pass").value = px.password || "";
+  toggleProxyFields();
+  $("f-tunnels").value = clampTunnels(s.tunnels);
+}
+
+function collectSettings() {
+  const dns = $("f-dns").value.split(/[\r\n,]+/).map(s => s.trim()).filter(Boolean);
+  return {
     mtu: parseInt($("f-mtu").value, 10) || 0,
     ipv4_enabled: $("f-ipv4").checked,
     ipv6_enabled: $("f-ipv6").checked,
@@ -738,12 +837,23 @@ function collectForm() {
       password: $("f-proxy-pass").value,
     },
     tunnels: clampTunnels($("f-tunnels").value),
-    extras: {
-      socks_port: parseInt($("f-socks").value, 10) || 10808,
-      http_port: parseInt($("f-http").value, 10) || 10809,
-      system_proxy: $("f-sysproxy").checked,
-    },
   };
+}
+
+async function loadSettings() {
+  const s = await call("settings_get"); // migrates settings.json if needed
+  state.settings = s || {};
+  fillSettings(state.settings);
+}
+
+/* Explicit save with a visible outcome: the backend validates the
+   settings and writes settings.json. Nothing here auto-saves. */
+async function saveSettings() {
+  try {
+    state.settings = await call("settings_save", { settings: collectSettings() });
+    fillSettings(state.settings);
+    toast("Settings saved");
+  } catch (e) { toast(e.message, true); }
 }
 
 async function saveProfile() {
@@ -784,7 +894,8 @@ async function connectToggle() {
     setTimeout(() => { $("btn-connect").disabled = false; }, 400);
     return;
   }
-  const id = $("conn-profile").value;
+  // The picker owns the selection; connect always reads it from state.
+  const id = state.selectedProfile;
   if (!id) { toast("Create a profile first", true); location.hash = "#/profiles"; return; }
   try {
     await call("connect", { id, mode: state.mode });
@@ -800,9 +911,49 @@ function wire() {
     b.addEventListener("click", () => setMode(b.dataset.mode));
   });
 
-  $("conn-profile").addEventListener("change", e => {
-    state.selectedProfile = e.target.value;
-    localStorage.setItem("swiftsstp.selectedProfile", state.selectedProfile);
+  // Profile dropdown: the trigger toggles the list, rows select, a click
+  // outside (or Escape) closes, and arrows move the highlight. Enter and
+  // Space open/select from the keyboard.
+  const profileKeyAt = { at: 0 }; // last keyboard activation (click guard)
+  const trigger = $("conn-profile-trigger");
+  trigger.addEventListener("click", () => {
+    if (Date.now() - profileKeyAt.at < 250) return; // synthesized click
+    if (profileMenuOpen()) closeProfileMenu();
+    else openProfileMenu();
+  });
+  trigger.addEventListener("keydown", e => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!profileMenuOpen()) { openProfileMenu(); return; }
+      const items = profileMenuItems();
+      if (!items.length) return;
+      const dir = e.key === "ArrowDown" ? 1 : -1;
+      const next = profileActive < 0 ? (dir > 0 ? 0 : items.length - 1) : profileActive + dir;
+      setActiveProfileOption(next < 0 ? items.length - 1 : next % items.length);
+    } else if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      profileKeyAt.at = Date.now();
+      if (!profileMenuOpen()) { openProfileMenu(); return; }
+      const items = profileMenuItems();
+      const li = items[profileActive >= 0 ? profileActive : 0];
+      if (li) selectProfile(li.dataset.id);
+      closeProfileMenu();
+    } else if (e.key === "Escape" && profileMenuOpen()) {
+      e.preventDefault();
+      closeProfileMenu();
+    } else if (e.key === "Tab") {
+      closeProfileMenu();
+    }
+  });
+  $("conn-profile-menu").addEventListener("click", e => {
+    const li = e.target.closest(".profile-option");
+    if (!li || li.getAttribute("aria-disabled") === "true") return;
+    selectProfile(li.dataset.id);
+    closeProfileMenu();
+    trigger.focus();
+  });
+  document.addEventListener("click", e => {
+    if (profileMenuOpen() && !$("conn-profile").contains(e.target)) closeProfileMenu();
   });
 
   $("btn-connect").addEventListener("click", connectToggle);
@@ -867,10 +1018,16 @@ function wire() {
   });
   $("btn-update-page").addEventListener("click", openReleasePage);
 
-  // Manual update check: these two controls are the ONLY callers of
-  // update_check — no launch check, no interval anywhere.
+  // Manual update check: this button is the ONLY caller of update_check
+  // — no launch check, no interval anywhere. The orange top-bar pill
+  // takes you here instead of re-checking, because the offer card lives
+  // on this tab now.
   $("btn-check-update").addEventListener("click", checkUpdate);
-  $("update-pill").addEventListener("click", checkUpdate);
+  $("update-pill").addEventListener("click", () => { location.hash = "#/settings"; });
+
+  // Settings: explicit save only — nothing writes settings.json until
+  // this button is pressed.
+  $("btn-save-settings").addEventListener("click", saveSettings);
 }
 
 async function init() {
@@ -903,10 +1060,12 @@ async function init() {
     (logs.lines || []).forEach(appendLog);
     await loadProfiles();
     await refreshStatus();
+    await loadSettings(); // app-wide options for the Settings tab
   } catch (e) { toast(e.message, true); }
 
-  // Running version ("dev" for local builds) — shown in the Home row and
-  // the gate that keeps a local build from ever asking GitHub anything.
+  // Running version ("dev" for local builds) — shown in the Settings
+  // row and the gate that keeps a local build from ever asking GitHub
+  // anything.
   try {
     const info = await call("app_info");
     state.version = (info && info.version) || "";

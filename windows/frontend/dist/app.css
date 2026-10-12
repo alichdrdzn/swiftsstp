@@ -216,13 +216,15 @@ main { padding: 16px 16px 84px; max-width: 1280px; width: 100%; margin: 0 auto; 
   gap: 6px;
   width: min(300px, 100%);
 }
-/* Profile dropdown — deliberately the SAME object as .btn-primary: a
-   white pill with a dark label. It is a button that happens to open a
-   list, so it dresses like the other primary button instead of wearing
-   the updater's orange (that hue is now only the UPDATE badge). The
-   selector beats the generic .input rules for background, border and
-   chevron. */
-.select.profile-pill {
+/* Profile dropdown — the trigger is deliberately the SAME object as
+ * .btn-primary: a white pill with a dark label. It is a button that
+ * happens to open a list, so it dresses like the other primary button
+ * instead of wearing the updater's orange (that hue is now only the
+ * UPDATE badge). The two-class selector beats the generic .input rules
+ * for background, border and chevron (both are single-class elsewhere,
+ * and .input is declared later in this file, so a lone .profile-pill
+ * would lose). */
+.input.profile-pill {
   appearance: none;
   -webkit-appearance: none;
   width: 100%;
@@ -235,22 +237,78 @@ main { padding: 16px 16px 84px; max-width: 1280px; width: 100%; margin: 0 auto; 
     url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'><path d='M2 4.5l4 3.5 4-3.5' fill='none' stroke='%230b0b0b' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>")
     no-repeat right 16px center / 12px 12px;
   color: #0b0b0b;
+  font-family: inherit;
   font-weight: 800;
   font-size: 14px;
   text-align: center;
-  text-align-last: center;
   cursor: pointer;
   outline: none;
   transition: box-shadow .15s;
 }
 /* White ring: the accent hue lives only in the badge now, so focus reads
    as a halo of the page's own text colour. */
-.select.profile-pill:focus {
+.input.profile-pill:focus {
   box-shadow: 0 0 0 3px rgba(255, 255, 255, .16);
 }
-/* Native option popup is OS-drawn; this hint keeps it dark where the
-   platform honours it (WebView2 honours option colours). */
-.profile-pill option { background: #131a26; color: #e7edf8; }
+.profile-pill-label {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* The list is anchored to the trigger with width:100%, so it is the
+   same size as the pill by construction — the whole reason this is not
+   a native <select> (whose popup the OS sizes itself). */
+.profile-dropdown { position: relative; width: 100%; }
+.profile-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 100%;
+  max-height: 260px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: linear-gradient(180deg, var(--card-2), var(--card));
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  z-index: 30;
+}
+.profile-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  font-size: 13.5px;
+  color: var(--text);
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+}
+/* One row per profile as "name (host:port)"; the host part just gets
+   clipped, the name stays readable. */
+.profile-option > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.profile-option:hover,
+.profile-option.active { background: rgba(255, 255, 255, .07); }
+/* Selected row: a check mark plus a lighter background. */
+.profile-option[aria-selected="true"] {
+  background: rgba(255, 255, 255, .12);
+  font-weight: 700;
+  color: #fff;
+}
+.profile-option[aria-selected="true"]::after { content: "✓"; }
+.profile-option[aria-disabled="true"] {
+  color: var(--muted);
+  cursor: default;
+  font-style: italic;
+}
 
 /* Large pill toggle — the only connect/disconnect control. The white knob
    slides left (off) / right (on); the track colour carries the state, so
@@ -359,14 +417,15 @@ main { padding: 16px 16px 84px; max-width: 1280px; width: 100%; margin: 0 auto; 
 .ip-flag img { display: block; border-radius: 3px; }
 .ip-value { font-size: 17px; font-weight: 700; color: #fff; }
 
-/* manual update check row — always on Home: version left, ghost button
-   right, outcome line under it. Nothing else in the app starts a check. */
+/* manual update check row — lives in Settings' UPDATES card: version
+   left, ghost button right, outcome line under it. Nothing else in the
+   app starts a check. */
 .update-check {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   gap: 8px;
-  width: min(300px, 100%);
+  width: 100%;
 }
 .update-check-row {
   display: flex;
@@ -381,17 +440,20 @@ main { padding: 16px 16px 84px; max-width: 1280px; width: 100%; margin: 0 auto; 
   color: rgba(255, 255, 255, .7);
 }
 .update-check .btn-ghost:disabled { opacity: .5; cursor: default; }
-.update-status { font-size: 12.5px; line-height: 1.4; text-align: center; }
+.update-status { font-size: 12.5px; line-height: 1.4; text-align: left; }
 .update-status.err { color: var(--red); }
 
-/* update card — one line on Home ("v0.3.0 available" + Install) that
-   grows a status line while downloading, asking to replace, or failed.
-   Appears only after a manual check found one. */
+/* update card — one line ("v0.3.0 available" + Install) inside the
+   UPDATES card in Settings, growing a status line while downloading,
+   asking to replace, or failed. Appears only after a manual check found
+   one. */
 .update-card {
   width: min(300px, 100%);
   padding: 12px 14px;
   border-color: rgba(255, 122, 24, .45);
 }
+/* Nested in the UPDATES card it spans the card, not the old Home pill. */
+#view-settings .update-card { width: 100%; margin-top: 12px; }
 .update-row {
   display: flex;
   align-items: center;
