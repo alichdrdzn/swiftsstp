@@ -21,6 +21,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -80,9 +81,9 @@ private val ToggleTrackConnecting = Color(0xFF6B4409)
 private val ToggleTrackError = Color(0xFF6B1F1F)
 
 /**
- * Home tab — the connect screen: the hero wordmark, an orange profile badge,
- * one big pill toggle, the state word, and the egress-IP lines. No stat
- * cards live here; they moved to the Stats tab.
+ * Home tab — the connect screen: the hero wordmark, a white profile badge,
+ * one big pill toggle, the state word, the egress-IP lines and the manual
+ * update check. No stat cards live here; they moved to the Stats tab.
  *
  * The toggle is the only control in the app that starts or stops a tunnel,
  * and it carries the state colour (green / amber / rose), which frees the
@@ -173,10 +174,14 @@ fun HomeScreen(
 
             IpAddressBlock(result = geo)
 
-            // The update offer sits under the IP block, out of the hero's
-            // way but impossible to miss: it is the only card on this tab.
+            // Updates are asked for, never announced: this row is permanent,
+            // and the offer below it only follows a check that found one.
+            Spacer(Modifier.height(24.dp))
+
+            UpdateCheckRow(update = update)
+
             if (update.updateAvailable && !(updateDismissed && !update.mandatory)) {
-                Spacer(Modifier.height(26.dp))
+                Spacer(Modifier.height(20.dp))
                 UpdateCard(offer = update, onLater = { updateDismissed = true })
             }
 
@@ -186,9 +191,11 @@ fun HomeScreen(
 }
 
 /**
- * Profile badge — an orange-outlined pill naming the selected server; tapping
- * opens the profile list. It is the second-brightest thing on screen after
- * the wordmark, so the "which server?" question answers at a glance.
+ * Profile badge — the primary button's white pill naming the selected
+ * server; tapping opens the profile list. It is the second-brightest thing
+ * on screen after the wordmark, so the "which server?" question answers at
+ * a glance. With nothing selected there is nothing to celebrate: the pill
+ * empties out to the ghost-button grey instead of taking an accent colour.
  */
 @Composable
 private fun ProfileBadge(
@@ -198,13 +205,14 @@ private fun ProfileBadge(
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(999.dp)
+    val tint = if (selected == null) TextMuted else Color(0xFF0B0B0B)
     Box(Modifier.widthIn(max = 300.dp)) {
         Row(
             modifier = Modifier
                 .height(40.dp)
                 .clip(shape)
-                .background(Orange.copy(alpha = 0.14f))
-                .border(1.dp, Orange.copy(alpha = 0.55f), shape)
+                .background(if (selected == null) Color.Transparent else Color.White)
+                .border(1.dp, if (selected == null) Hairline2 else Color.Transparent, shape)
                 .clickable { menuOpen = true }
                 .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -212,7 +220,7 @@ private fun ProfileBadge(
             Text(
                 text = selected?.let { p -> p.name.ifBlank { p.host } } ?: "No profiles",
                 style = MaterialTheme.typography.labelLarge,
-                color = if (selected == null) TextMuted else Color(0xFFFFA04A),
+                color = tint,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
@@ -221,7 +229,7 @@ private fun ProfileBadge(
             Icon(
                 Icons.Default.ArrowDropDown,
                 contentDescription = null,
-                tint = if (selected == null) TextMuted else Color(0xFFFFA04A),
+                tint = tint,
             )
         }
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
@@ -427,6 +435,86 @@ private fun IpAddressBlock(result: IpGeo.Result?) {
                     letterSpacing = 0.sp,
                 ),
                 color = if (result == null) TextMuted else Color.White,
+            )
+        }
+    }
+}
+
+/**
+ * The Home update-check row — the only thing in the app that can put a
+ * request on the wire for a new version. The running version on the left,
+ * the button on the right, and every outcome the check can have rendered
+ * inline instead of in a toast: "Checking…" while the request runs (the
+ * button disabled, because a second tap buys nothing), the offer card below
+ * when one exists, a muted "You're on the latest version" that lingers for a
+ * few seconds, and one honest line when GitHub cannot be reached.
+ *
+ * A dev build never makes the request at all: its version name is a
+ * placeholder CI did not stamp, so there is nothing on earth to compare a
+ * release against.
+ */
+@Composable
+private fun UpdateCheckRow(update: UpdateChecker.Check) {
+    val context = LocalContext.current
+    val status by UpdateChecker.status.collectAsState()
+
+    // "Up to date" is news, not a state: it earns a few seconds and then
+    // the row offers the button again.
+    var latest by remember { mutableStateOf(false) }
+    LaunchedEffect(status, update.updateAvailable) {
+        if (status == UpdateChecker.Status.ANSWERED && !update.updateAvailable) {
+            latest = true
+            delay(4_000)
+            latest = false
+        } else {
+            latest = false
+        }
+    }
+    var devNote by remember { mutableStateOf(false) }
+
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = update.versionLabel,
+                style = MaterialTheme.typography.labelMedium,
+                color = TextMuted,
+                maxLines = 1,
+            )
+            when {
+                update.isDev -> if (devNote) {
+                    Text(
+                        text = "Local build — updates only ship in releases",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextMuted,
+                        textAlign = TextAlign.End,
+                    )
+                } else {
+                    GhostButton(text = "Check for updates", onClick = { devNote = true })
+                }
+                status == UpdateChecker.Status.CHECKING ->
+                    GhostButton(text = "Checking…", onClick = {}, enabled = false)
+                latest -> Text(
+                    text = "You're on the latest version",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted,
+                )
+                else -> GhostButton(
+                    text = "Check for updates",
+                    onClick = { UpdateChecker.refresh(context) },
+                )
+            }
+        }
+        if (status == UpdateChecker.Status.FAILED) {
+            Text(
+                text = "could not reach GitHub",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextMuted,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
             )
         }
     }

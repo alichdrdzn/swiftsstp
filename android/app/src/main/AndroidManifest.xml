@@ -14,6 +14,8 @@
       (PackageManager.canRequestPackageInstalls).
     -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Sideloaded from GitHub releases, never Play: seeing every installed app is the whole point of per-app tunneling. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
     <application
         android:allowBackup="true"

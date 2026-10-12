@@ -49,11 +49,13 @@ the manifest: the CLI is built from source or a package manager.
 - Compare `version` as semver against the running build. A build that does
   not know its own version (`"dev"`, i.e. anything built outside CI) must
   never claim an update exists.
-- The check is advisory and must never block the tunnel: run it off the
-  connection path, cache the result, and fail silently when GitHub is
-  unreachable.
-- Fetch on launch and every 6–12 hours, with `If-None-Match`. Back off on
-  repeated failure; do not retry in a tight loop.
+- The check is MANUAL ONLY (user preference): the client asks for the
+  manifest when the user taps "Check for updates" — never on launch,
+  never on a timer, never in the background. Cache the body and the etag
+  so that one request is cheap, and always tell the user the outcome:
+  the offer, "you are on the latest version", or an honest failure line.
+- The check must never block the tunnel: it runs off the connection
+  path, and a build that does not know its version never requests at all.
 - Verify `sha256` of the downloaded file before installing anything.
 - A manifest whose `assets` entry for this platform is missing is not an
   error: the platform simply has no update in that release.

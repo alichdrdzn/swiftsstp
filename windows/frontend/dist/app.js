@@ -386,18 +386,53 @@ async function copyIP() {
   geoLabelTimer = setTimeout(() => { label.textContent = "IP address"; }, 1500);
 }
 
-/* ---------------- update (stable channel) ---------------- */
-/* Mirrors the Android install card: the check is advisory and silent on
- * any failure, the download shows bytes/percent, and the replace+restart
- * is always confirmed by the user before the backend touches the exe. */
+/* ---------------- update (stable channel, manual only) ----------------
+ * Nothing here runs on launch or on a timer: the app never spends the
+ * user's network on its own. The only triggers are the Home "Check for
+ * updates" row and the orange top-bar pill once it appears. The download
+ * still shows bytes/percent and the replace+restart is always confirmed
+ * by the user before the backend touches the exe. */
 const UPDATE_POLL_MS = 400;
-const UPDATE_CHECK_MS = 6 * 60 * 60 * 1000; // every 6h, per UPDATE_SCHEMA.md
-let updateBusy = false;
+let updateBusy = false;   // also the "Checking…" guard: a second tap is ignored
 let updatePoll = null;
+let updateStatusTimer = null;
+
+/* "dev" (or an unknown version) means CI never stamped this build — the
+ * backend would refuse to call it an update anyway, so we never even ask. */
+function isDevBuild() { return !state.version || state.version === "dev"; }
+
+/* The row's outcome line. kind: "" = persistent muted, "err" = red and
+ * persistent (the user should know the check did not happen), "ok" =
+ * self-clearing so the row goes quiet again on its own. */
+function setUpdateStatus(text, kind) {
+  const el = $("update-status");
+  clearTimeout(updateStatusTimer);
+  el.classList.toggle("err", kind === "err");
+  el.textContent = text || "";
+  el.classList.toggle("hidden", !text);
+  if (text && kind === "ok") {
+    updateStatusTimer = setTimeout(() => el.classList.add("hidden"), 6000);
+  }
+}
+
+/* Version on the left of the row, button state on the right. "dev" is
+ * shown verbatim — it is a real value, not a missing one. */
+function renderUpdateRow() {
+  const v = state.version || "dev";
+  $("update-check-ver").textContent = v === "dev" ? "dev" : `v${v}`;
+  const btn = $("btn-check-update");
+  btn.textContent = updateBusy ? "Checking…" : "Check for updates";
+  btn.disabled = updateBusy || isDevBuild();
+  if (isDevBuild()) {
+    setUpdateStatus("Local build — updates only ship in releases");
+  }
+}
 
 async function checkUpdate() {
-  if (updateBusy) return;
+  if (updateBusy || isDevBuild()) return;
   updateBusy = true;
+  setUpdateStatus("");     // drop the previous outcome while we look again
+  renderUpdateRow();
   try {
     const d = await call("update_check");
     // Never clobber a flow the user already started.
@@ -405,8 +440,15 @@ async function checkUpdate() {
     state.update = d && d.available ? d : null;
     state.updatePhase = state.update ? "ready" : "none";
     renderUpdate();
-  } catch { /* offline, or a "dev" build: no update, no noise */ }
-  finally { updateBusy = false; }
+    if (!state.update) setUpdateStatus("You're on the latest version", "ok");
+  } catch {
+    // Honest failure: we asked and could not get an answer. An update
+    // already on screen stays there — a flaky network does not un-know it.
+    setUpdateStatus("could not reach GitHub", "err");
+  } finally {
+    updateBusy = false;
+    renderUpdateRow();
+  }
 }
 
 function renderUpdate() {
@@ -824,6 +866,11 @@ function wire() {
     else startDownload();
   });
   $("btn-update-page").addEventListener("click", openReleasePage);
+
+  // Manual update check: these two controls are the ONLY callers of
+  // update_check — no launch check, no interval anywhere.
+  $("btn-check-update").addEventListener("click", checkUpdate);
+  $("update-pill").addEventListener("click", checkUpdate);
 }
 
 async function init() {
@@ -858,17 +905,14 @@ async function init() {
     await refreshStatus();
   } catch (e) { toast(e.message, true); }
 
-  // Running version ("dev" for local builds) — the updater's baseline.
+  // Running version ("dev" for local builds) — shown in the Home row and
+  // the gate that keeps a local build from ever asking GitHub anything.
   try {
     const info = await call("app_info");
     state.version = (info && info.version) || "";
   } catch { /* unknown: treat like a dev build */ }
-
-  // Update check: launch + every 6h, advisory and silent on failure.
-  if (state.version && state.version !== "dev") {
-    checkUpdate();
-    setInterval(checkUpdate, UPDATE_CHECK_MS);
-  }
+  // Paint the row only: the check itself waits for the user's tap.
+  renderUpdateRow();
 
   // Fallback poll in case an event is missed.
   setInterval(refreshStatus, 2500);

@@ -121,9 +121,11 @@ html, body {
 .pill[data-state="reconnecting"] { background: rgba(255, 180, 84, .12); border-color: rgba(255, 180, 84, .5); color: var(--amber); animation: pulse 1.2s ease-in-out infinite; }
 .pill[data-state="error"],
 .pill[data-state="auth_error"]   { background: rgba(255, 107, 107, .12); border-color: rgba(255, 107, 107, .5); color: var(--red); }
-/* UPDATE badge: same orange the profile pill already owns (#FF7A18
-   family) — the updater borrows the existing hue instead of adding one. */
+/* UPDATE badge: the only orange left in the app — the profile pill gave
+   up its hue, so orange now means "a newer build is waiting". Clickable
+   (re-runs the check), so it gets a pointer. */
 .pill-update {
+  cursor: pointer;
   background: rgba(255, 122, 24, .14);
   border-color: rgba(255, 122, 24, .5);
   color: #ffa04a;
@@ -167,7 +169,7 @@ main { padding: 16px 16px 84px; max-width: 1280px; width: 100%; margin: 0 auto; 
 .muted { color: var(--muted); font-weight: 500; }
 .mono { font-family: "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace; }
 
-/* ---- home (hero → badge → toggle → status → IP → mode) ---- */
+/* ---- home (hero → badge → toggle → status → IP → update check → mode) ---- */
 /* Auto margins on the hero and the segmented control split the free space
    above and below, so the wordmark floats around the upper third instead of
    sticking to the top at any window height. */
@@ -197,7 +199,7 @@ main { padding: 16px 16px 84px; max-width: 1280px; width: 100%; margin: 0 auto; 
   color: #fff;
   -webkit-text-stroke: 3px #fff;
 }
-/* Badge label lives for screen readers only — the orange pill is
+/* Badge label lives for screen readers only — the white pill is
    self-describing. */
 .visually-hidden {
   position: absolute;
@@ -214,30 +216,37 @@ main { padding: 16px 16px 84px; max-width: 1280px; width: 100%; margin: 0 auto; 
   gap: 6px;
   width: min(300px, 100%);
 }
-/* Orange pill dropdown. Selector beats the generic .input rules so the
-   badge keeps its own background, border and chevron. */
+/* Profile dropdown — deliberately the SAME object as .btn-primary: a
+   white pill with a dark label. It is a button that happens to open a
+   list, so it dresses like the other primary button instead of wearing
+   the updater's orange (that hue is now only the UPDATE badge). The
+   selector beats the generic .input rules for background, border and
+   chevron. */
 .select.profile-pill {
   appearance: none;
   -webkit-appearance: none;
   width: 100%;
   padding: 10px 40px 10px 16px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 122, 24, .55);
-  background: rgba(255, 122, 24, .14)
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'><path d='M2 4.5l4 3.5 4-3.5' fill='none' stroke='%23ffa04a' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>")
+  /* 1px transparent, not none: keeps the box identical to a bordered
+     control so nothing shifts if a platform default peeks through. */
+  border: 1px solid transparent;
+  background: #fff
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'><path d='M2 4.5l4 3.5 4-3.5' fill='none' stroke='%230b0b0b' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>")
     no-repeat right 16px center / 12px 12px;
-  color: #ffa04a;
-  font-weight: 700;
+  color: #0b0b0b;
+  font-weight: 800;
   font-size: 14px;
   text-align: center;
   text-align-last: center;
   cursor: pointer;
   outline: none;
-  transition: border-color .15s, box-shadow .15s;
+  transition: box-shadow .15s;
 }
+/* White ring: the accent hue lives only in the badge now, so focus reads
+   as a halo of the page's own text colour. */
 .select.profile-pill:focus {
-  border-color: rgba(255, 122, 24, .85);
-  box-shadow: 0 0 0 3px rgba(255, 122, 24, .18);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, .16);
 }
 /* Native option popup is OS-drawn; this hint keeps it dark where the
    platform honours it (WebView2 honours option colours). */
@@ -350,8 +359,34 @@ main { padding: 16px 16px 84px; max-width: 1280px; width: 100%; margin: 0 auto; 
 .ip-flag img { display: block; border-radius: 3px; }
 .ip-value { font-size: 17px; font-weight: 700; color: #fff; }
 
+/* manual update check row — always on Home: version left, ghost button
+   right, outcome line under it. Nothing else in the app starts a check. */
+.update-check {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: min(300px, 100%);
+}
+.update-check-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+.update-check-ver {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, .7);
+}
+.update-check .btn-ghost:disabled { opacity: .5; cursor: default; }
+.update-status { font-size: 12.5px; line-height: 1.4; text-align: center; }
+.update-status.err { color: var(--red); }
+
 /* update card — one line on Home ("v0.3.0 available" + Install) that
-   grows a status line while downloading, asking to replace, or failed. */
+   grows a status line while downloading, asking to replace, or failed.
+   Appears only after a manual check found one. */
 .update-card {
   width: min(300px, 100%);
   padding: 12px 14px;

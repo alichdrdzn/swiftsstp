@@ -8,9 +8,7 @@ import com.swiftsstp.client.VpnController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.IOException
@@ -21,7 +19,13 @@ import java.net.URL
  * Stable-channel update check against `update-manifest.json`
  * (docs/UPDATE_SCHEMA.md). Mirrors [IpGeo]'s shape: an object with a
  * [state] StateFlow that never throws to the UI, debounced so bursts of
- * triggers cost one request, and cached so the answer survives a restart.
+ * triggers cost one request, and cached so a re-check is cheap.
+ *
+ * The check is manual-only. Nothing fires it — not launch, not a timer, not
+ * the tunnel — so the app never spends the user's bytes or attention on a
+ * question they did not ask. [refresh] is the sole entry point, and the
+ * etag/manifest cached from the last attempt means the answer it gives back
+ * can be a 304 with no body at all.
  *
  * Why the manifest and not the GitHub API: `releases/latest/download/…` is
  * a redirect into the release-asset CDN, needs no token and has no
@@ -73,6 +77,14 @@ object UpdateChecker {
         val versionLabel: String get() = if (isDev) "dev" else "v$currentVersion"
     }
 
+    /**
+     * Where the last attempt got to, so the Home row can render its own
+     * wording: ANSWERED means the manifest came back and [state] holds the
+     * verdict (an offer or none), FAILED means GitHub could not be reached
+     * and [state] still holds whatever the previous answer was.
+     */
+    enum class Status { IDLE, CHECKING, ANSWERED, FAILED }
+
     /** Manifest format version this client understands; anything else is rejected. */
     private const val SCHEMA = 1
     private const val CHANNEL = "stable"
@@ -89,11 +101,6 @@ object UpdateChecker {
     private const val TIMEOUT_MS = 4000
     /** Floor between two attempts, so bursts of triggers cost one request. */
     private const val MIN_INTERVAL_MS = 2000L
-    /** Refresh rhythm once started: the schema asks for 6–12 hours. */
-    private const val REFRESH_INTERVAL_MS = 8L * 60 * 60 * 1000
-    /** Failure backoff: 30s doubling to 15 min, so a dead network never spins. */
-    private const val BACKOFF_BASE_MS = 30_000L
-    private const val BACKOFF_MAX_MS = 15L * 60 * 1000
 
     private const val PREFS = "update"
     private const val KEY_ETAG = "etag"
@@ -113,6 +120,9 @@ object UpdateChecker {
     /** Current answer, seeded with the running build so the UI is never null. */
     val state = MutableStateFlow(Check(BuildConfig.VERSION_NAME, isDevBuild()))
 
+    /** How the last manual attempt went; the Home row renders straight off this. */
+    val status = MutableStateFlow(Status.IDLE)
+
     @Volatile
     private var prefs: SharedPreferences? = null
 
@@ -120,61 +130,47 @@ object UpdateChecker {
     private var lastAttemptAt = 0L
 
     @Volatile
-    private var blockedUntil = 0L
-
-    @Volatile
     private var inFlight = false
 
-    private var failures = 0
-
     /**
-     * Wire up and check: reads the cached manifest back into [state] so a
-     * relaunch shows the badge before the network answers, fires the first
-     * check, and arms the 8-hour refresh. Idempotent — MainActivity and its
-     * recreations all end up here once.
+     * The one and only trigger — Home's "Check for updates" row and the top
+     * bar's UPDATE pill. Nothing calls this on launch or on a timer. It
+     * returns without a request when one is already running or the debounce
+     * floor has not passed, in which case [status] still describes the
+     * answer the user just got, so the UI never waits on a check that will
+     * not happen.
      */
-    @Synchronized
-    fun start(context: Context) {
-        val app = context.applicationContext
-        if (prefs == null) {
-            prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            prefs?.getString(KEY_BODY, null)?.let { replay(it) }
-            scope.launch {
-                while (isActive) {
-                    delay(REFRESH_INTERVAL_MS)
-                    refresh()
-                }
-            }
-        }
-        refresh()
-    }
-
-    /**
-     * Refresh in the background. Safe to call from anywhere (UI, effects,
-     * state observers): overlapping or too-early calls are collapsed into
-     * the request already running, and repeated failure pushes the next
-     * attempt out instead of retrying in a tight loop.
-     */
-    fun refresh() {
+    fun refresh(context: Context) {
+        bind(context.applicationContext)
         val now = SystemClock.elapsedRealtime()
-        if (inFlight || now < blockedUntil || now - lastAttemptAt < MIN_INTERVAL_MS) return
+        if (inFlight || now - lastAttemptAt < MIN_INTERVAL_MS) return
         lastAttemptAt = now
         inFlight = true
+        status.value = Status.CHECKING
         scope.launch {
             try {
                 fetch()
-                failures = 0
+                status.value = Status.ANSWERED
             } catch (e: Exception) {
-                failures++
-                blockedUntil = SystemClock.elapsedRealtime() +
-                    (BACKOFF_BASE_MS shl (failures - 1).coerceAtMost(5)).coerceAtMost(BACKOFF_MAX_MS)
                 // Last known state is kept: an offline or blocked device is
-                // not worth anything louder than one log line.
+                // not worth anything louder than one log line and the row's
+                // own error text.
+                status.value = Status.FAILED
                 VpnController.appendLog("update: check failed (${e.javaClass.simpleName})")
             } finally {
                 inFlight = false
             }
         }
+    }
+
+    /**
+     * Prefs carry the etag and manifest of the last attempt, so revalidation
+     * can cost a 304 and no body. Bound lazily because the checker is a plain
+     * object: nothing needs it until the user actually asks.
+     */
+    @Synchronized
+    private fun bind(app: Context) {
+        if (prefs == null) prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     }
 
     /**
@@ -252,11 +248,6 @@ object UpdateChecker {
             }
         }
         state.value = next
-    }
-
-    /** Same evaluation for a body read back from the prefs cache. */
-    private fun replay(body: String) {
-        parse(body)?.let { state.value = evaluate(it) }
     }
 
     /** Pure decision step — the only place an offer is created or withdrawn. */

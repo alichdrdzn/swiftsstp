@@ -5,7 +5,6 @@ import com.swiftsstp.client.data.ProfileStore
 import com.swiftsstp.client.data.UsageEntry
 import com.swiftsstp.client.data.UsageStore
 import com.swiftsstp.client.model.Profile
-import com.swiftsstp.client.net.UpdateChecker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -52,11 +51,8 @@ object AppModel {
         val app = context.applicationContext
         appDir = app.filesDir
         UsageStore.init(app.filesDir)
-        // Advisory update check (docs/UPDATE_SCHEMA.md): launch + every 8h
-        // from here, plus on demand from the UI. It runs on its own IO
-        // scope and never touches the connection path — an unreachable
-        // GitHub cannot delay or disturb a tunnel.
-        UpdateChecker.start(app)
+        // No update check here, on purpose: it is manual-only (see
+        // net/UpdateChecker), so launching the app never touches GitHub.
         refreshProfiles()
         refreshUsage()
         if (selectedId.value == null) {

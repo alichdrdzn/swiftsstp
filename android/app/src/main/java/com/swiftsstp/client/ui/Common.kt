@@ -52,6 +52,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -87,8 +88,9 @@ enum class NavTab { HOME, PROFILES, STATS, LOG }
 /**
  * Slim shared top bar — brand mark, "SwiftSSTP"
  * wordmark with the "SSTP client" caption, the running version, the UPDATE
- * pill when a newer stable release exists, and the status `.pill` on the
- * right. Navigation moved to the bottom bar, so this is one row only.
+ * pill once this session's check found a newer release, and the status
+ * `.pill` on the right. Navigation moved to the bottom bar, so this is one
+ * row only.
  *
  * [showBrand] = false (Home) draws nothing visible but keeps the slot and
  * its status-bar inset: Scaffold derives the content inset from the topBar's
@@ -112,6 +114,7 @@ fun SwiftSSTPTopBar(
         Box(modifier.fillMaxWidth().statusBarsPadding())
         return
     }
+    val context = LocalContext.current
     val update by UpdateChecker.state.collectAsState()
     Column(modifier.fillMaxWidth().background(FieldBackground)) {
         // Edge-to-edge: Scaffold does not pad custom topBar composables, so
@@ -170,7 +173,7 @@ fun SwiftSSTPTopBar(
                     modifier = Modifier.clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClick = { UpdateChecker.refresh() },
+                        onClick = { UpdateChecker.refresh(context) },
                     ),
                 )
             }
