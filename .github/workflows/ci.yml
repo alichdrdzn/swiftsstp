@@ -121,6 +121,23 @@ jobs:
             exit 1
           fi
       - uses: gradle/actions/setup-gradle@v4
+      # Layout tests first: the Home profile list must open below the badge
+      # and never cover the connect toggle, measured on a normal and on the
+      # smallest supported phone. They run on the JVM through Robolectric,
+      # so they cost seconds and need no emulator.
+      - name: Layout tests (JVM)
+        working-directory: android
+        run: |
+          set -o pipefail
+          rc=0
+          ./gradlew testDebugUnitTest --console=plain 2>&1 | tee /tmp/layout-tests.log || rc=$?
+          if [ "$rc" -ne 0 ]; then
+            { echo "### Layout tests failed (rc=$rc)"; echo '```'
+              grep -E 'FAILED|AssertionError' /tmp/layout-tests.log | head -30; echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error title=layout-tests::$(grep -m1 'AssertionError' /tmp/layout-tests.log | cut -c1-1000)"
+            exit 1
+          fi
       - name: assembleDebug
         working-directory: android
         run: |

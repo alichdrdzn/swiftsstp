@@ -92,6 +92,14 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    testOptions {
+        unitTests {
+            // Layout tests run on the JVM through Robolectric and need the
+            // app's resources (theme, drawables, strings) to compose.
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 dependencies {
@@ -114,4 +122,14 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
+
+    // Layout tests (JVM, no device): the profile list on Home must open
+    // below the badge and never cover the connect toggle, at every screen
+    // size. Those are measured bounds, so they are asserted rather than
+    // eyeballed — this bug shipped twice before it was checked properly.
+    testImplementation(platform("androidx.compose:compose-bom:2024.12.01"))
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
