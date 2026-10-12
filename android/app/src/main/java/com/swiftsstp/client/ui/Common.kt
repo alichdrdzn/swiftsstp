@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -52,7 +53,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -82,8 +82,8 @@ fun formatRate(v: Long): String = when {
     else -> "$v B/s"
 }
 
-/** Which bottom-bar tab is on screen; the four root tabs of the app. */
-enum class NavTab { HOME, PROFILES, STATS, LOG }
+/** Which bottom-bar tab is on screen; the five root tabs of the app. */
+enum class NavTab { HOME, PROFILES, STATS, LOG, SETTINGS }
 
 /**
  * Slim shared top bar — brand mark, "SwiftSSTP"
@@ -95,8 +95,9 @@ enum class NavTab { HOME, PROFILES, STATS, LOG }
  * [showBrand] = false (Home) draws nothing visible but keeps the slot and
  * its status-bar inset: Scaffold derives the content inset from the topBar's
  * height, so an inset-only zero-height box preserves today's layout while
- * letting the hero wordmark own the top of the screen. Home's update offer
- * lives in its own card there (see HomeScreen's UpdateCard).
+ * letting the hero wordmark own the top of the screen. The check itself and
+ * its offer live in their own card on the Settings tab
+ * (see SettingsScreen's UpdateCard).
  *
  * The caption is the flexible slot: at 360dp the wordmark, the version, the
  * UPDATE pill and the state chip do not all fit on one line, so the caption
@@ -109,12 +110,12 @@ fun SwiftSSTPTopBar(
     state: VpnController.State,
     modifier: Modifier = Modifier,
     showBrand: Boolean = true,
+    onSettings: () -> Unit = {},
 ) {
     if (!showBrand) {
         Box(modifier.fillMaxWidth().statusBarsPadding())
         return
     }
-    val context = LocalContext.current
     val update by UpdateChecker.state.collectAsState()
     Column(modifier.fillMaxWidth().background(FieldBackground)) {
         // Edge-to-edge: Scaffold does not pad custom topBar composables, so
@@ -165,15 +166,16 @@ fun SwiftSSTPTopBar(
             )
             if (update.updateAvailable) {
                 Spacer(Modifier.width(10.dp))
-                // Tapping re-checks: the debounce collapses a burst, and a
-                // 304 costs the CDN nothing.
+                // Tapping opens the Settings tab, which owns both the check
+                // and the offer: an offer the pill only hints at is worth
+                // more if the install button lives where it is described.
                 InfoChip(
                     text = "UPDATE",
                     color = Orange,
                     modifier = Modifier.clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClick = { UpdateChecker.refresh(context) },
+                        onClick = onSettings,
                     ),
                 )
             }
@@ -203,6 +205,10 @@ fun SwiftSSTPBottomBar(
         TabBarItem(NavTab.PROFILES, "Profiles", Icons.Default.Person, current, onSelect)
         TabBarItem(NavTab.STATS, "Stats", AppIcons.BarChart, current, onSelect)
         TabBarItem(NavTab.LOG, "Log", AppIcons.Terminal, current, onSelect)
+        // Settings is the fifth tab: the app-wide options no longer hide
+        // inside a profile, so they need a home of their own. "Settings"
+        // fits the 360dp budget at labelMedium next to the other four.
+        TabBarItem(NavTab.SETTINGS, "Settings", Icons.Default.Settings, current, onSelect)
     }
 }
 
@@ -251,7 +257,9 @@ fun AppScaffold(
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = { SwiftSSTPTopBar(state, showBrand = showBrand) },
+        // The top bar's UPDATE pill is a navigation shortcut, not a
+        // second check affordance: it lands on the tab that owns updates.
+        topBar = { SwiftSSTPTopBar(state, showBrand = showBrand, onSettings = { onTab(NavTab.SETTINGS) }) },
         bottomBar = { SwiftSSTPBottomBar(current, onTab) },
         content = content,
     )

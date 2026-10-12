@@ -31,6 +31,7 @@ import com.swiftsstp.client.ui.LogScreen
 import com.swiftsstp.client.ui.NavTab
 import com.swiftsstp.client.ui.ProfilesScreen
 import com.swiftsstp.client.ui.ProfileEditorScreen
+import com.swiftsstp.client.ui.SettingsScreen
 import com.swiftsstp.client.ui.StatsScreen
 import com.swiftsstp.client.ui.SwiftSSTPTheme
 
@@ -76,6 +77,7 @@ private fun App() {
     val profiles by AppModel.profiles.collectAsState()
     val usage by AppModel.usage.collectAsState()
     val selectedId by AppModel.selectedId.collectAsState()
+    val settings by AppModel.settings.collectAsState()
     val vpn by VpnController.snapshot.collectAsState()
     val log by VpnController.log.collectAsState()
     val connectTick by AppModel.connectTick.collectAsState()
@@ -126,7 +128,7 @@ private fun App() {
         AppModel.profile(AppModel.selectedId.value)?.let(connect)
     }
 
-    // The bottom bar switches between the four root tabs; the system back
+    // The bottom bar switches between the five root tabs; the system back
     // gesture only has somewhere to go from the editor.
     val openTab: (NavTab) -> Unit = {
         AppModel.screen.value = when (it) {
@@ -134,6 +136,7 @@ private fun App() {
             NavTab.PROFILES -> Screen.Profiles
             NavTab.STATS -> Screen.Stats
             NavTab.LOG -> Screen.Log
+            NavTab.SETTINGS -> Screen.Settings
         }
     }
 
@@ -181,6 +184,13 @@ private fun App() {
         is Screen.Log -> LogScreen(
             state = vpn.state,
             log = log,
+            onTab = openTab,
+        )
+
+        is Screen.Settings -> SettingsScreen(
+            settings = settings,
+            state = vpn.state,
+            onSave = { AppModel.saveSettings(it) },
             onTab = openTab,
         )
 

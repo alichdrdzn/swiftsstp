@@ -2,8 +2,10 @@ package com.swiftsstp.client
 
 import android.content.Context
 import com.swiftsstp.client.data.ProfileStore
+import com.swiftsstp.client.data.SettingsStore
 import com.swiftsstp.client.data.UsageEntry
 import com.swiftsstp.client.data.UsageStore
+import com.swiftsstp.client.model.AppSettings
 import com.swiftsstp.client.model.Profile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -18,12 +20,14 @@ sealed class Screen {
     object Profiles : Screen()
     object Stats : Screen()
     object Log : Screen()
+    object Settings : Screen()
     data class Editor(val profileId: String?) : Screen()
 }
 
 /**
- * Application state shared by the tabs: the profile list, lifetime usage, the
- * selected profile for the Home tab, and navigation.
+ * Application state shared by the tabs: the profile list, the app-wide
+ * settings, lifetime usage, the selected profile for the Home tab, and
+ * navigation.
  * The VPN service writes usage through [UsageStore] and bumps [usage] itself.
  */
 object AppModel {
@@ -35,6 +39,8 @@ object AppModel {
     val profiles = MutableStateFlow<List<Profile>>(emptyList())
     val usage = MutableStateFlow<Map<String, UsageEntry>>(emptyMap())
     val selectedId = MutableStateFlow<String?>(null)
+    /** The app-wide settings (settings.json), shared by every profile. */
+    val settings = MutableStateFlow(AppSettings())
 
     /**
      * One-shot "connect now" requests from outside the UI (the
@@ -54,6 +60,11 @@ object AppModel {
         // No update check here, on purpose: it is manual-only (see
         // net/UpdateChecker), so launching the app never touches GitHub.
         refreshProfiles()
+        // The app-wide settings load once here, which also runs the
+        // one-time migration from a pre-split profiles.json: the Settings
+        // tab and every connect path then read a settled value.
+        runCatching { SettingsStore.ensureLoaded(app.filesDir) }
+        settings.value = SettingsStore.current
         refreshUsage()
         if (selectedId.value == null) {
             selectedId.value = profiles.value.firstOrNull()?.id
@@ -102,6 +113,20 @@ object AppModel {
         )
         save(copy)
         return copy
+    }
+
+    /**
+     * Persist the app-wide settings and update the flow first, so the UI
+     * reflects the save the instant the button is pressed rather than when
+     * the IO write lands.
+     */
+    fun saveSettings(s: AppSettings) {
+        // In memory first: VpnController merges SettingsStore.current, so a
+        // connect pressed right after this Save must not dial with the old
+        // values while the IO write is still queued.
+        SettingsStore.set(s)
+        settings.value = s
+        scope.launch { SettingsStore.save(dir(), s) }
     }
 
     /** Called by the service after every usage mutation so the UI follows. */

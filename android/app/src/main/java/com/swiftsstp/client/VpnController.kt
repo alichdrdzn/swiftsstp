@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.VpnService
 import androidx.core.content.ContextCompat
+import com.swiftsstp.client.data.SettingsStore
 import com.swiftsstp.client.model.Profile
 import com.swiftsstp.client.vpn.SwiftSSTPVpnService
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -85,11 +86,23 @@ object VpnController {
      */
     fun prepare(context: Context): Intent? = VpnService.prepare(context)
 
+    /**
+     * The one door into the tunnel: MainActivity's connect lambda and the
+     * quick-settings tile both end up here, so the app-wide settings are
+     * merged exactly once, right before the intent is built — every start
+     * path therefore dials with the effective configuration (profile +
+     * settings.json), never with a profile's leftovers.
+     */
     fun start(context: Context, profile: Profile) {
-        val intent = Intent(context, SwiftSSTPVpnService::class.java)
+        val app = context.applicationContext
+        // Cheap after the first call; on a cold start it also runs the
+        // one-time migration from a pre-split profiles.json.
+        SettingsStore.ensureLoaded(app.filesDir)
+        val effective = SettingsStore.current.applyTo(profile)
+        val intent = Intent(app, SwiftSSTPVpnService::class.java)
             .setAction(SwiftSSTPVpnService.ACTION_CONNECT)
-            .putExtra(SwiftSSTPVpnService.EXTRA_PROFILE_JSON, profile.toJson().toString())
-        ContextCompat.startForegroundService(context, intent)
+            .putExtra(SwiftSSTPVpnService.EXTRA_PROFILE_JSON, effective.toJson().toString())
+        ContextCompat.startForegroundService(app, intent)
     }
 
     fun startAfterConsent(context: Context, profile: Profile) = start(context, profile)

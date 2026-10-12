@@ -147,11 +147,11 @@ private fun ProfileCard(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
+                // Only facts of this server: the tunnel-wide options moved
+                // to settings.json, so tagging them here would advertise a
+                // value the profile no longer owns.
                 TlsChip(profile.tlsMode)
                 InfoChip(profile.username.ifBlank { "—" }, TextPrimary)
-                if (profile.autoReconnect.enabled) InfoChip("auto-reconnect", TextPrimary)
-                if (profile.proxy.enabled) InfoChip("proxy ${profile.proxy.type}", Amber)
-                if (profile.tunnels > 1) InfoChip("${profile.tunnels} tunnels", Mint)
             }
 
             Row(

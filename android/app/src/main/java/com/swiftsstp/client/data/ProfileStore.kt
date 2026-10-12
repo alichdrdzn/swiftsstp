@@ -6,10 +6,14 @@ import org.json.JSONObject
 import java.io.File
 
 /**
- * Reads and writes `filesDir/profiles.json` in the shared schema shape.
- * Serialization goes through [Profile.toJson]/[Profile.fromJson], so the
- * `proxy` and `tunnels` fields are written with their canonical names and
- * older files (without them) load with the documented defaults.
+ * Reads and writes `filesDir/profiles.json` in the shared schema shape:
+ * one entry per server — address, credentials and certificate handling,
+ * nothing else. Serialization goes through [Profile.fromJson] and
+ * [Profile.storeJson], so the moved tunnel settings (mtu, families, DNS,
+ * reconnect, proxy, tunnels, per-app rules) are neither written here nor
+ * lost on load: an older file that still carries them reads them once,
+ * and from then on no save puts them back. Those live in settings.json,
+ * owned by [SettingsStore].
  */
 object ProfileStore {
 
@@ -33,13 +37,14 @@ object ProfileStore {
             val root = JSONObject().apply {
                 put("version", 1)
                 put("profiles", JSONArray().apply {
-                    profiles.forEach { put(it.toJson()) }
+                    profiles.forEach { put(it.storeJson()) }
                 })
             }
+            val body = root.toString(2)
             val f = File(dir, "profiles.json")
             val tmp = File(dir, "profiles.json.tmp")
-            tmp.writeText(root.toString(2))
-            if (!tmp.renameTo(f)) f.writeText(root.toString(2))
+            tmp.writeText(body)
+            if (!tmp.renameTo(f)) f.writeText(body)
         }
     }
 }

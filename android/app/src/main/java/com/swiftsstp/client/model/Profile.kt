@@ -12,10 +12,12 @@ data class AutoReconnect(
 )
 
 /**
- * Per-app tunneling, schema field `extras`:
- *  - `allowed_apps`: package names
- *  - `app_rule`: "allow" (only these apps use the tunnel) or
- *    "deny" (everything except these apps)
+ * Per-app tunneling, schema field `app_rules` in settings.json:
+ *  - `packages`: package names
+ *  - `mode`: "allow" (only these apps use the tunnel) or
+ *  - "deny" (everything except these apps)
+ * The service intent encodes the same data under `extras`
+ * (`app_rule` / `allowed_apps`) — the names the engine has always read.
  */
 data class AppRules(
     val mode: String = MODE_ALLOW,
@@ -62,7 +64,13 @@ data class ProxySettings(
     }
 }
 
-/** One entry of `profiles.json`, exactly the shape in docs/PROFILE_SCHEMA.md. */
+/**
+ * One server profile: everything that makes a connection to THAT server —
+ * address, credentials and certificate handling (docs/PROFILE_SCHEMA.md).
+ * The moved tunnel fields still ride along on the class because the
+ * VpnService consumes them out of the merged intent, but only
+ * [storeJson] decides what a save puts back into profiles.json.
+ */
 data class Profile(
     val id: String,
     val name: String,
@@ -114,6 +122,48 @@ data class Profile(
             put("app_rule", rules.mode)
         })
     }
+
+    /**
+     * The per-profile subset written back to `profiles.json` — exactly the
+     * keys docs/PROFILE_SCHEMA.md lists for a profile entry, and nothing
+     * more. The moved tunnel fields are deliberately absent: they live in
+     * settings.json now, so a writer that kept putting them here would
+     * fight the schema's "writers must NOT write the moved fields back"
+     * rule and freeze stale values into every saved profile.
+     *
+     * [toJson] stays full on purpose — it feeds the service intent, and the
+     * VpnService consumes the merged effective config in one blob.
+     */
+    fun storeJson(): JSONObject = JSONObject().apply {
+        put("id", id)
+        put("name", name)
+        put("host", host)
+        put("port", port)
+        put("sni", sni)
+        put("username", username)
+        put("password", password)
+        put("tls_mode", tlsMode)
+        put("ca_path", caPath)
+        // Schema shape is an object; Android has no per-profile extras yet.
+        put("extras", JSONObject())
+    }
+
+    /**
+     * The moved tunnel fields read off this profile as the app-wide
+     * settings they now are — the shape the settings.json migration seeds
+     * from, so an install that predates the split keeps the values it had
+     * configured on its profiles.
+     */
+    fun appSettings(): AppSettings = AppSettings(
+        mtu = mtu,
+        ipv4Enabled = ipv4Enabled,
+        ipv6Enabled = ipv6Enabled,
+        dnsOverride = dnsOverride,
+        autoReconnect = autoReconnect,
+        proxy = proxy,
+        tunnels = tunnels,
+        rules = rules,
+    )
 
     fun tlsModeLabel(): String = when (tlsMode) {
         TLS_VERIFY -> "VERIFY"

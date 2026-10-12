@@ -78,7 +78,7 @@ object UpdateChecker {
     }
 
     /**
-     * Where the last attempt got to, so the Home row can render its own
+     * Where the last attempt got to, so the Settings row can render its own
      * wording: ANSWERED means the manifest came back and [state] holds the
      * verdict (an offer or none), FAILED means GitHub could not be reached
      * and [state] still holds whatever the previous answer was.
@@ -120,7 +120,7 @@ object UpdateChecker {
     /** Current answer, seeded with the running build so the UI is never null. */
     val state = MutableStateFlow(Check(BuildConfig.VERSION_NAME, isDevBuild()))
 
-    /** How the last manual attempt went; the Home row renders straight off this. */
+    /** How the last manual attempt went; the Settings row renders straight off this. */
     val status = MutableStateFlow(Status.IDLE)
 
     @Volatile
@@ -133,8 +133,9 @@ object UpdateChecker {
     private var inFlight = false
 
     /**
-     * The one and only trigger — Home's "Check for updates" row and the top
-     * bar's UPDATE pill. Nothing calls this on launch or on a timer. It
+     * The one and only trigger — the Settings tab's "Check for updates" row
+     * and the top bar's UPDATE pill (which navigates to that tab rather
+     * than checking itself). Nothing calls this on launch or on a timer. It
      * returns without a request when one is already running or the debounce
      * floor has not passed, in which case [status] still describes the
      * answer the user just got, so the UI never waits on a check that will
