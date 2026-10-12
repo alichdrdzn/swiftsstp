@@ -23,16 +23,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -49,15 +51,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.swiftsstp.client.VpnController
@@ -96,6 +104,21 @@ fun HomeScreen(
     val profileName = selected?.let { it.name.ifBlank { it.host } }.orEmpty()
     val geo by IpGeo.state.collectAsState()
 
+    // The profile list opens IN FLOW under the badge instead of in a
+    // popup (a popup anchored there lands on the connect toggle), so it
+    // needs a height budget. It may borrow exactly the free space the
+    // three weighted spacers hold: those heights are captured only while
+    // the list is closed, because once it is open the spacers have
+    // already given their space away and re-measuring would hand the
+    // list a budget that shrinks under it on every status refresh.
+    var pickerOpen by remember { mutableStateOf(false) }
+    var slackTop by remember { mutableStateOf(0) }
+    var slackMid by remember { mutableStateOf(0) }
+    var slackBot by remember { mutableStateOf(0) }
+    val density = LocalDensity.current
+    val listBudget = (with(density) { (slackTop + slackMid + slackBot).toDp() } - 8.dp)
+        .coerceAtLeast(96.dp)
+
     // Refresh triggers: this tab appearing, the tunnel state settling (the
     // delay debounces a CONNECTING → CONNECTED → … burst into one request),
     // and a slow heartbeat while Home stays on screen.
@@ -120,13 +143,30 @@ fun HomeScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             // 1.5f above / 1f below centres the wordmark near the upper third.
-            Spacer(Modifier.weight(1.5f))
+            // Each weighted spacer reports the free space it holds (see the
+            // budget above): that height is what the profile list may take.
+            Spacer(
+                Modifier
+                    .weight(1.5f)
+                    .onGloballyPositioned { if (!pickerOpen) slackTop = it.size.height },
+            )
 
             BrandWordmark()
 
-            Spacer(Modifier.weight(1f))
+            Spacer(
+                Modifier
+                    .weight(1f)
+                    .onGloballyPositioned { if (!pickerOpen) slackMid = it.size.height },
+            )
 
-            ProfileBadge(selected = selected, profiles = profiles, onSelect = onSelect)
+            ProfileBadge(
+                selected = selected,
+                profiles = profiles,
+                open = pickerOpen,
+                onOpenChange = { pickerOpen = it },
+                onSelect = onSelect,
+                listMaxHeight = listBudget,
+            )
 
             if (profiles.isEmpty()) {
                 Spacer(Modifier.height(16.dp))
@@ -147,6 +187,10 @@ fun HomeScreen(
                 state = vpn.state,
                 enabled = selected != null,
                 onClick = {
+                    // Choosing to connect also puts the profile list away:
+                    // it is in flow now, so leaving it open would keep the
+                    // column expanded under the toggle the user just used.
+                    pickerOpen = false
                     if (vpn.active) onDisconnect() else selected?.let(onConnect)
                 },
             )
@@ -159,36 +203,65 @@ fun HomeScreen(
 
             IpAddressBlock(result = geo)
 
-            Spacer(Modifier.weight(1f))
+            Spacer(
+                Modifier
+                    .weight(1f)
+                    .onGloballyPositioned { if (!pickerOpen) slackBot = it.size.height },
+            )
         }
     }
 }
 
 /**
  * Profile badge — the primary button's white pill naming the selected
- * server; tapping opens the profile list. It is the second-brightest thing
- * on screen after the wordmark, so the "which server?" question answers at
- * a glance. With nothing selected there is nothing to celebrate: the pill
- * empties out to the ghost-button grey instead of taking an accent colour.
+ * server; tapping opens the profile list underneath it. It is the
+ * second-brightest thing on screen after the wordmark, so the "which
+ * server?" question answers at a glance. With nothing selected there is
+ * nothing to celebrate: the pill empties out to the ghost-button grey
+ * instead of taking an accent colour.
+ *
+ * The list is laid out IN FLOW rather than in a popup: a popup anchored
+ * to the badge opens on top of the connect toggle, which sits 30dp
+ * below it, and covering the one connect control is the bug being fixed
+ * here. In flow, opening the list pushes the toggle and the rest of the
+ * column down instead of covering them, and it closes again the moment
+ * a profile is picked, the badge is tapped a second time, or the user
+ * connects. [listMaxHeight] is the height budget the Home column's
+ * weighted spacers can hand over, so the column never runs past the
+ * bottom of the screen at any size; the list scrolls inside it. Its
+ * width is measured off the pill itself, so list and pill stay flush
+ * whatever the profile name runs to.
  */
 @Composable
 private fun ProfileBadge(
     selected: Profile?,
     profiles: List<Profile>,
+    open: Boolean,
+    onOpenChange: (Boolean) -> Unit,
     onSelect: (Profile) -> Unit,
+    listMaxHeight: Dp,
 ) {
-    var menuOpen by remember { mutableStateOf(false) }
+    val density = LocalDensity.current
+    var pillWidth by remember { mutableStateOf(0.dp) }
     val shape = RoundedCornerShape(999.dp)
     val tint = if (selected == null) TextMuted else Color(0xFF0B0B0B)
-    Box(Modifier.widthIn(max = 300.dp)) {
+    Column(Modifier.widthIn(max = 300.dp)) {
         Row(
             modifier = Modifier
+                // FIRST in the chain, so it reports the pill's final size.
+                // Behind the padding below it would report the content box
+                // instead and drop the pill's own 16dp side padding, which
+                // would make the list 32dp narrower than the badge.
+                .onSizeChanged { pillWidth = with(density) { it.width.toDp() } }
                 .height(40.dp)
                 .clip(shape)
                 .background(if (selected == null) Color.Transparent else Color.White)
                 .border(1.dp, if (selected == null) Hairline2 else Color.Transparent, shape)
-                .clickable { menuOpen = true }
-                .padding(horizontal = 16.dp),
+                .clickable { onOpenChange(!open) }
+                .padding(horizontal = 16.dp)
+                // Stable handle for the layout test: the pill's text is
+                // also a row in the list, so text alone cannot pick it.
+                .testTag("profile-badge-pill"),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -206,14 +279,55 @@ private fun ProfileBadge(
                 tint = tint,
             )
         }
-        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+
+        if (open && profiles.isNotEmpty() && pillWidth > 0.dp) {
+            Spacer(Modifier.height(6.dp))
+            ProfileList(
+                profiles = profiles,
+                modifier = Modifier
+                    .width(pillWidth)
+                    .heightIn(max = listMaxHeight),
+                onSelect = {
+                    onOpenChange(false)
+                    onSelect(it)
+                },
+            )
+        }
+    }
+}
+
+/**
+ * The profile list — the same card treatment as every other surface on
+ * the screen (14dp radius, the two-tone card gradient, hairline border,
+ * the standard shadow), scrolling inside the height budget its caller
+ * works out. Rows keep the stock DropdownMenuItem look the popup used,
+ * so what changed is only where the list sits, not how it reads.
+ */
+@Composable
+private fun ProfileList(
+    profiles: List<Profile>,
+    modifier: Modifier = Modifier,
+    onSelect: (Profile) -> Unit,
+) {
+    val shape = RoundedCornerShape(14.dp)
+    Box(
+        modifier = modifier
+            .shadow(8.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
+            .background(Brush.verticalGradient(listOf(Surface2, Surface1)), shape)
+            .border(1.dp, Hairline, shape)
+            .testTag("profile-list"),
+    ) {
+        Column(Modifier.verticalScroll(rememberScrollState())) {
             profiles.forEach { p ->
                 DropdownMenuItem(
-                    text = { Text(p.name.ifBlank { p.host }) },
-                    onClick = {
-                        menuOpen = false
-                        onSelect(p)
+                    text = {
+                        Text(
+                            text = p.name.ifBlank { p.host },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     },
+                    onClick = { onSelect(p) },
                 )
             }
         }
