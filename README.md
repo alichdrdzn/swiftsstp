@@ -9,31 +9,34 @@ Android and Windows, built around a single portable Go engine.
 
 SwiftSSTP establishes SSTP tunnels (PPP over HTTP over TLS) without
 depending on any platform's built-in client, so connection behavior is
-consistent across both supported operating systems and every protocol
-option is available per profile.
+consistent across both supported operating systems: a profile carries the
+server it dials and the certificate it is verified against, while the
+tunnel options are configured once for the whole app.
 
 ## Capabilities
 
 - **Tunnel modes**: route all device traffic through the server, or expose
   the tunnel as local SOCKS5 and HTTP proxy endpoints for applications
   that support proxy configuration (Windows).
-- **Certificate handling**: validate against the system trust store, pin a
-  private CA bundle, or accept self-signed server certificates, chosen
-  per profile. Inner PPP authentication (MS-CHAPv2) mutually
-  authenticates the peers regardless of the TLS verification mode.
 - **Per-profile configuration**: server host and port, TLS SNI override,
-  MTU, DNS override, IPv4/IPv6, auto-reconnect with exponential backoff,
-  upstream proxy (HTTP CONNECT or SOCKS5, with optional credentials), and
-  1–8 parallel sessions with independent failover.
-- **Per-application tunneling** (Android): restrict the VPN to a listed
-  set of applications or exclude a listed set.
+  username and password, and the certificate mode (system trust store,
+  pinned private CA bundle, or accept self-signed). Inner PPP
+  authentication (MS-CHAPv2 family) mutually authenticates the peers
+  regardless of the TLS verification mode.
+- **App-wide settings** (one set of values shared by every profile, in
+  `settings.json`): MTU, DNS override, IPv4/IPv6, auto-reconnect with
+  exponential backoff, upstream proxy (HTTP CONNECT or SOCKS5, with
+  optional credentials), and 1–8 parallel sessions with independent
+  failover. Both shells expose them on their Settings tab.
+- **Per-application tunneling** (Android, also app-wide): restrict the VPN
+  to a listed set of applications or exclude a listed set.
 - **Traffic accounting**: live session transfer rates and persistent
   lifetime totals for every profile.
 - **Diagnostics**: connection log, negotiated endpoint details, and the
   server certificate's SHA-256 fingerprint for out-of-band verification.
 - **Interface**: dark theme with a tabbed layout on both platforms:
   connection control and the current public address on the home tab,
-  with profiles, statistics, and logs each in their own tab.
+  with profiles, statistics, logs and settings each in their own tab.
 
 ## Download
 
