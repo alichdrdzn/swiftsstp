@@ -21,6 +21,11 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+// version is stamped by CI (`wails build -ldflags "-X main.version=$VER"`)
+// so the running build can compare itself against the update manifest;
+// anything built locally reports "dev" and must never claim an update.
+var version = "dev"
+
 func main() {
 	app := NewApp()
 

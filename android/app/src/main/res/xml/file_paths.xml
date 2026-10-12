@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The one path the FileProvider may expose: cacheDir/update, where the
+  updater keeps the SHA-256-verified release APK between "download" and
+  "hand to the system installer". Cache, not files, so the OS may reclaim
+  it and a reinstall never resurrects a stale binary.
+-->
+<paths>
+    <cache-path
+        name="updates"
+        path="update/" />
+</paths>

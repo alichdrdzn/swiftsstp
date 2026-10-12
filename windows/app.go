@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"swiftsstp/windows/internal/proxy"
 	"swiftsstp/windows/internal/store"
 	"swiftsstp/windows/internal/sysproxy"
+	"swiftsstp/windows/internal/update"
 )
 
 const maxLogLines = 500
@@ -32,13 +34,17 @@ type App struct {
 	pxy   *proxy.Proxy
 	usage *usage.Store
 
-	mu   sync.Mutex
-	logs []string
+	mu     sync.Mutex
+	logs   []string
+	update update.Info // last successful update_check result (for update_notes)
 }
 
 // NewApp wires the engine, data planes and persistence together.
 func NewApp() *App {
 	a := &App{}
+	// A previous self-update may have left its retired image next to the
+	// exe; drop it now (best effort, background — see update.Cleanup).
+	update.Cleanup()
 	u, err := store.OpenUsage()
 	if err != nil {
 		fmt.Printf("swiftsstp: usage store unavailable: %v\n", err)
@@ -119,7 +125,7 @@ func (a *App) dispatch(action string, args []byte) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		return map[string]any{"config_dir": dir}, nil
+		return map[string]any{"config_dir": dir, "version": version}, nil
 
 	// ---- profiles ----
 	case "profiles_list":
@@ -251,6 +257,70 @@ func (a *App) dispatch(action string, args []byte) (any, error) {
 		a.mu.Lock()
 		a.logs = nil
 		a.mu.Unlock()
+		return nil, nil
+
+	// ---- updater (stable channel; see docs/UPDATE_SCHEMA.md) ----
+	case "update_check":
+		info, err := update.Check(version)
+		if err != nil {
+			return nil, err // advisory: the UI stays silent
+		}
+		a.mu.Lock()
+		a.update = info
+		a.mu.Unlock()
+		return info, nil
+
+	case "update_progress":
+		return update.Snapshot(), nil
+
+	case "update_download":
+		// Re-check rather than trusting a URL/sha from the UI: the asset
+		// and its digest must come from the manifest itself.
+		info, err := update.Check(version)
+		if err != nil {
+			return nil, err
+		}
+		if !info.Available {
+			return nil, fmt.Errorf("no update available")
+		}
+		path, err := update.Download(info)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"path": path}, nil
+
+	case "update_apply":
+		res, err := update.Apply()
+		if err != nil {
+			return res, err
+		}
+		if res.Applied {
+			// The new build has been started; give the UI a moment to get
+			// this reply, then leave. The .old image is cleaned up by the
+			// new process on its way up (update.Cleanup).
+			a.logf("update applied: restarting")
+			go func() {
+				time.Sleep(750 * time.Millisecond)
+				os.Exit(0)
+			}()
+		}
+		return res, nil
+
+	case "update_notes":
+		a.mu.Lock()
+		info, cached := a.update, a.update.NotesURL != ""
+		a.mu.Unlock()
+		if !cached { // never checked (e.g. "dev" build): try once now
+			checked, err := update.Check(version)
+			if err != nil {
+				return nil, err
+			}
+			info = checked
+		}
+		if info.NotesURL == "" {
+			return nil, fmt.Errorf("no release page for this build")
+		}
+		runtime.BrowserOpenURL(a.ctx, info.NotesURL)
 		return nil, nil
 
 	default:

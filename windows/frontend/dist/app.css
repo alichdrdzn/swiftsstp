@@ -101,7 +101,7 @@ html, body {
   background: rgba(255, 255, 255, .12);
   z-index: -1;
 }
-.topbar-right { margin-left: auto; }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 
 /* ---- pills / status ---- */
 .pill {
@@ -121,6 +121,13 @@ html, body {
 .pill[data-state="reconnecting"] { background: rgba(255, 180, 84, .12); border-color: rgba(255, 180, 84, .5); color: var(--amber); animation: pulse 1.2s ease-in-out infinite; }
 .pill[data-state="error"],
 .pill[data-state="auth_error"]   { background: rgba(255, 107, 107, .12); border-color: rgba(255, 107, 107, .5); color: var(--red); }
+/* UPDATE badge: same orange the profile pill already owns (#FF7A18
+   family) — the updater borrows the existing hue instead of adding one. */
+.pill-update {
+  background: rgba(255, 122, 24, .14);
+  border-color: rgba(255, 122, 24, .5);
+  color: #ffa04a;
+}
 
 @keyframes pulse { 50% { opacity: .55; } }
 
@@ -342,6 +349,26 @@ main { padding: 16px 16px 84px; max-width: 1280px; width: 100%; margin: 0 auto; 
 }
 .ip-flag img { display: block; border-radius: 3px; }
 .ip-value { font-size: 17px; font-weight: 700; color: #fff; }
+
+/* update card — one line on Home ("v0.3.0 available" + Install) that
+   grows a status line while downloading, asking to replace, or failed. */
+.update-card {
+  width: min(300px, 100%);
+  padding: 12px 14px;
+  border-color: rgba(255, 122, 24, .45);
+}
+.update-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.update-ver { font-size: 14px; font-weight: 800; color: #fff; }
+/* White pill, scaled down so the row stays one line at 360px. */
+.btn-update { padding: 8px 20px; font-size: 14px; }
+.update-msg { margin-top: 10px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.update-msg.err { color: var(--red); }
+.update-card .btn-row { margin-top: 10px; }
 
 /* segmented control */
 .segmented {

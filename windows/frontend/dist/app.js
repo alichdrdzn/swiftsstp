@@ -23,6 +23,13 @@ const state = {
   selectedProfile: migratedKey("swiftsstp.selectedProfile", "sstpflash.selectedProfile") || "",
   editing: null, // profile object being edited
   geoip: null,   // last {ip,country,colo} from the geoip action (cached)
+  version: "",       // running build version from app_info ("dev" = unstamped)
+  update: null,      // {version, size, …} when the stable channel has one
+  updatePhase: "none", // none|ready|downloading|confirm|applying|error
+  updateProgress: null,
+  updatePath: "",    // verified download awaiting the user's confirm
+  updateError: "",
+  updateUnwritable: false, // install dir needs elevation → no retry, open the page
 };
 
 /* ---------------- helpers ---------------- */
@@ -379,6 +386,146 @@ async function copyIP() {
   geoLabelTimer = setTimeout(() => { label.textContent = "IP address"; }, 1500);
 }
 
+/* ---------------- update (stable channel) ---------------- */
+/* Mirrors the Android install card: the check is advisory and silent on
+ * any failure, the download shows bytes/percent, and the replace+restart
+ * is always confirmed by the user before the backend touches the exe. */
+const UPDATE_POLL_MS = 400;
+const UPDATE_CHECK_MS = 6 * 60 * 60 * 1000; // every 6h, per UPDATE_SCHEMA.md
+let updateBusy = false;
+let updatePoll = null;
+
+async function checkUpdate() {
+  if (updateBusy) return;
+  updateBusy = true;
+  try {
+    const d = await call("update_check");
+    // Never clobber a flow the user already started.
+    if (state.updatePhase !== "none" && state.updatePhase !== "ready") return;
+    state.update = d && d.available ? d : null;
+    state.updatePhase = state.update ? "ready" : "none";
+    renderUpdate();
+  } catch { /* offline, or a "dev" build: no update, no noise */ }
+  finally { updateBusy = false; }
+}
+
+function renderUpdate() {
+  const info = state.update;
+  $("update-pill").classList.toggle("hidden", !info);
+  $("update-card").classList.toggle("hidden", !info);
+  if (!info) return;
+
+  const ins = $("btn-update-install"), msg = $("update-msg"),
+        act = $("update-actions"), later = $("btn-update-later"),
+        retry = $("btn-update-retry"), page = $("btn-update-page");
+  ins.classList.remove("hidden");
+  ins.textContent = "Install";
+  msg.classList.add("hidden");
+  msg.classList.remove("err");
+  act.classList.add("hidden");
+  later.classList.add("hidden");
+  retry.classList.add("hidden");
+  page.classList.add("hidden");
+  $("update-ver").textContent = `v${info.version} available`;
+
+  switch (state.updatePhase) {
+    case "downloading": {
+      ins.classList.add("hidden");
+      const p = state.updateProgress || {};
+      const total = p.total || info.size || 0;
+      const done = p.done || 0;
+      const pct = total ? ` (${Math.min(100, Math.floor(done / total * 100))}%)` : "";
+      msg.textContent = total
+        ? `Downloading… ${fmtBytes(done)} / ${fmtBytes(total)}${pct}`
+        : `Downloading… ${fmtBytes(done)}`;
+      msg.classList.remove("hidden");
+      break;
+    }
+    case "confirm":
+      msg.textContent = "Replace swiftsstp.exe and restart?"; // ask before replacing
+      msg.classList.remove("hidden");
+      ins.textContent = "Replace";
+      act.classList.remove("hidden");
+      later.classList.remove("hidden");
+      break;
+    case "applying":
+      ins.classList.add("hidden");
+      msg.textContent = "Restarting…";
+      msg.classList.remove("hidden");
+      break;
+    case "error":
+      ins.classList.add("hidden");
+      msg.textContent = state.updateError || "update failed";
+      msg.classList.add("err");
+      msg.classList.remove("hidden");
+      act.classList.remove("hidden");
+      // Unwritable folder (e.g. Program Files): retry cannot help —
+      // offer the release page instead.
+      (state.updateUnwritable ? page : retry).classList.remove("hidden");
+      break;
+  }
+}
+
+async function startDownload() {
+  if (!state.update) return;
+  state.updatePhase = "downloading";
+  state.updatePath = "";
+  state.updateError = "";
+  state.updateUnwritable = false;
+  state.updateProgress = { done: 0, total: state.update.size || 0 };
+  renderUpdate();
+  // update_download blocks until the file is checksum-verified; poll the
+  // progress in parallel (Wails runs each Call in its own goroutine).
+  updatePoll = setInterval(async () => {
+    try {
+      const p = await call("update_progress");
+      if (state.updatePhase === "downloading") {
+        state.updateProgress = p;
+        renderUpdate();
+      }
+    } catch { /* keep the last numbers */ }
+  }, UPDATE_POLL_MS);
+  try {
+    const d = await call("update_download");
+    state.updatePath = (d && d.path) || "";
+    state.updatePhase = "confirm";
+  } catch (e) {
+    state.updatePhase = "error";
+    state.updateError = e.message || "download failed";
+  } finally {
+    clearInterval(updatePoll);
+    updatePoll = null;
+    renderUpdate();
+  }
+}
+
+async function applyUpdate() {
+  state.updatePhase = "applying";
+  state.updateError = "";
+  state.updateUnwritable = false;
+  renderUpdate();
+  try {
+    const d = await call("update_apply");
+    if (d && d.applied === false) {
+      // Nothing was replaced: explain why and offer the fallback.
+      state.updatePhase = "error";
+      state.updateUnwritable = !!d.unwritable;
+      state.updateError = d.error || "update could not be installed";
+    }
+    // applied → the backend restarts the app into the new build; the
+    // card stays on "Restarting…".
+  } catch (e) {
+    state.updatePhase = "error";
+    state.updateError = e.message || "install failed";
+  } finally { renderUpdate(); }
+}
+
+/* "What's new" / fallback: open the release page in the browser. */
+async function openReleasePage() {
+  try { await call("update_notes"); }
+  catch (e) { toast(e.message, true); }
+}
+
 /* ---------------- log ---------------- */
 function appendLog(line) {
   const box = $("log");
@@ -661,6 +808,22 @@ function wire() {
   $("tunnels-inc").addEventListener("click", () => {
     $("f-tunnels").value = clampTunnels(parseInt($("f-tunnels").value, 10) + 1);
   });
+
+  // Update card: Install starts the download; the same white pill then
+  // confirms the replace-and-restart. Retry redoes whichever step failed.
+  $("btn-update-install").addEventListener("click", () => {
+    if (state.updatePhase === "confirm") applyUpdate();
+    else if (state.updatePhase === "ready") startDownload();
+  });
+  $("btn-update-later").addEventListener("click", () => {
+    state.updatePhase = "ready";
+    renderUpdate();
+  });
+  $("btn-update-retry").addEventListener("click", () => {
+    if (state.updatePath) applyUpdate();
+    else startDownload();
+  });
+  $("btn-update-page").addEventListener("click", openReleasePage);
 }
 
 async function init() {
@@ -694,6 +857,18 @@ async function init() {
     await loadProfiles();
     await refreshStatus();
   } catch (e) { toast(e.message, true); }
+
+  // Running version ("dev" for local builds) — the updater's baseline.
+  try {
+    const info = await call("app_info");
+    state.version = (info && info.version) || "";
+  } catch { /* unknown: treat like a dev build */ }
+
+  // Update check: launch + every 6h, advisory and silent on failure.
+  if (state.version && state.version !== "dev") {
+    checkUpdate();
+    setInterval(checkUpdate, UPDATE_CHECK_MS);
+  }
 
   // Fallback poll in case an event is missed.
   setInterval(refreshStatus, 2500);

@@ -79,6 +79,12 @@ android {
 
     buildFeatures {
         compose = true
+        // VERSION_NAME / VERSION_CODE as BuildConfig fields: the update
+        // checker has to know its own build honestly, and reading the
+        // PackageManager would mean a package-info round trip on every
+        // comparison. CI stamps both from the tag; without -PversionName
+        // the defaultConfig fallbacks below mark the build as "dev".
+        buildConfig = true
     }
 
     packaging {

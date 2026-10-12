@@ -46,7 +46,9 @@ jobs:
         run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
       - name: Build
         working-directory: windows
-        run: wails build -platform windows/amd64
+        # Stamp main.version so a running build can compare itself with the
+        # update manifest; an unstamped (local) build reports "dev".
+        run: wails build -platform windows/amd64 -ldflags "-X main.version=${GITHUB_REF_NAME#v}"
       - uses: actions/upload-artifact@v4
         with:
           name: windows-exe
@@ -147,6 +149,7 @@ jobs:
     needs: [build-windows, build-android, build-cli]
     timeout-minutes: 10
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -160,6 +163,18 @@ jobs:
           mv dist/sstpcli "out/sstpcli-${VER}-linux-amd64"
           cd out && sha256sum * > SHA256SUMS
           ls -la
+      - name: Generate update manifest
+        run: |
+          # Built from the same SHA256SUMS the release publishes, so the
+          # manifest and that file can never disagree (docs/UPDATE_SCHEMA.md).
+          # Clients poll releases/latest/download/update-manifest.json.
+          set -o pipefail
+          python3 scripts/update-manifest.py \
+            --version "${GITHUB_REF_NAME#v}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --tag "$GITHUB_REF_NAME" \
+            --asset-dir out \
+            --version-code "$(( $(date +%s) / 86400 ))" | tee out/update-manifest.json
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}

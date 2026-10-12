@@ -3,6 +3,11 @@ package com.swiftsstp.client.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
@@ -49,6 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
@@ -63,6 +69,8 @@ import androidx.compose.ui.unit.sp
 import com.swiftsstp.client.VpnController
 import com.swiftsstp.client.model.Profile
 import com.swiftsstp.client.net.IpGeo
+import com.swiftsstp.client.net.UpdateChecker
+import com.swiftsstp.client.net.UpdateInstaller
 import kotlinx.coroutines.delay
 
 /** Toggle track at rest — dark charcoal, matching the Windows shell's neutral. */
@@ -94,6 +102,13 @@ fun HomeScreen(
     val selected = profiles.firstOrNull { it.id == selectedId } ?: profiles.firstOrNull()
     val profileName = selected?.let { it.name.ifBlank { it.host } }.orEmpty()
     val geo by IpGeo.state.collectAsState()
+    val update by UpdateChecker.state.collectAsState()
+
+    // Optional offers can be put away for this session; a mandatory one
+    // (min_version says we are too old to be trusted) has no "Later" and
+    // therefore nothing to dismiss. A new offer re-arms the dismissal.
+    var updateDismissed by remember { mutableStateOf(false) }
+    LaunchedEffect(update.availableVersion) { updateDismissed = false }
 
     // Refresh triggers: this tab appearing, the tunnel state settling (the
     // delay debounces a CONNECTING → CONNECTED → … burst into one request),
@@ -157,6 +172,13 @@ fun HomeScreen(
             Spacer(Modifier.height(30.dp))
 
             IpAddressBlock(result = geo)
+
+            // The update offer sits under the IP block, out of the hero's
+            // way but impossible to miss: it is the only card on this tab.
+            if (update.updateAvailable && !(updateDismissed && !update.mandatory)) {
+                Spacer(Modifier.height(26.dp))
+                UpdateCard(offer = update, onLater = { updateDismissed = true })
+            }
 
             Spacer(Modifier.weight(1f))
         }
@@ -408,6 +430,136 @@ private fun IpAddressBlock(result: IpGeo.Result?) {
             )
         }
     }
+}
+
+/**
+ * The Home update offer — one line under the IP block: what is available,
+ * and the Install button that downloads the APK, verifies its SHA-256
+ * against the manifest and hands it to the system installer
+ * ([UpdateInstaller] does the work; the installer dialog takes over after
+ * that, because a sideloaded app can never install silently).
+ *
+ * Everything the flow can say lives here rather than in a toast: a
+ * determinate line while it downloads, "checksum mismatch, not installing"
+ * when the bytes do not match, and a Retry that starts over. A mandatory
+ * offer ([UpdateChecker.Check.mandatory], set by the manifest's
+ * min_version) shows no "Later": when the release says this build is too
+ * old to be trusted, the only question left is when.
+ */
+@Composable
+private fun UpdateCard(
+    offer: UpdateChecker.Check,
+    onLater: () -> Unit,
+) {
+    val context = LocalContext.current
+    val download by UpdateInstaller.state.collectAsState()
+
+    // Coming back from the "install unknown apps" screen resumes the
+    // install: the verified APK has been waiting in cacheDir the whole time.
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) {
+        if (context.packageManager.canRequestPackageInstalls()) {
+            UpdateInstaller.handoff(context)
+        }
+    }
+
+    val asset = offer.asset
+    val install: () -> Unit = {
+        if (asset != null) {
+            val verified = download is UpdateInstaller.State.Ready
+            if (verified && !context.packageManager.canRequestPackageInstalls()) {
+                // Route the grant through the launcher so granting it picks
+                // the install back up instead of stranding the file.
+                permissionLauncher.launch(
+                    Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
+                        .setData(Uri.parse("package:${context.packageName}")),
+                )
+            } else {
+                UpdateInstaller.start(context, asset)
+            }
+        }
+    }
+
+    val downloading = download as? UpdateInstaller.State.Downloading
+    val verifying = download is UpdateInstaller.State.Verifying
+    val failed = download as? UpdateInstaller.State.Failed
+    val busy = downloading != null || verifying
+    val fraction = downloading?.fraction
+    val headline = when {
+        failed != null -> failed.message
+        verifying -> "verifying checksum…"
+        downloading != null && fraction != null ->
+            "downloading… ${(fraction * 100).toInt()}%"
+        downloading != null -> "downloading…"
+        download is UpdateInstaller.State.Ready -> "v${offer.availableVersion} ready to install"
+        else -> "v${offer.availableVersion} available"
+    }
+
+    val shape = RoundedCornerShape(14.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(8.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
+            .background(Brush.verticalGradient(listOf(Surface2, Surface1)), shape)
+            .border(1.dp, Hairline, shape)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = headline,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (failed != null) Rose else Color.White,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    // The headline doubles as the "what's new" link while
+                    // there is nothing else to report about the offer.
+                    modifier = Modifier.clickable(
+                        enabled = offer.notesUrl != null && failed == null && !busy,
+                        onClick = { openReleaseNotes(context, offer.notesUrl) },
+                    ),
+                )
+                if (downloading != null) {
+                    Spacer(Modifier.height(8.dp))
+                    // Determinate by preference: the manifest ships the APK's
+                    // byte count, so there is no excuse for a spinner.
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(Hairline2),
+                    ) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth(fraction ?: 0f)
+                                .height(3.dp)
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(Orange),
+                        )
+                    }
+                }
+            }
+            if (!offer.mandatory && !busy) {
+                GhostButton(text = "Later", onClick = onLater)
+                Spacer(Modifier.width(8.dp))
+            }
+            PrimaryButton(
+                text = if (failed != null) "Retry" else "Install",
+                onClick = install,
+                height = 34.dp,
+                fontSize = 13.sp,
+                busy = busy,
+            )
+        }
+    }
+}
+
+/** "What's new": the release page the manifest points at. */
+private fun openReleaseNotes(context: Context, url: String?) {
+    if (url.isNullOrBlank()) return
+    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
 }
 
 /** Plain-text clipboard copy via the platform service (no Compose deprecations). */

@@ -17,12 +17,13 @@
         <span class="brand-sub">SSTP client</span>
       </div>
       <div class="topbar-right">
+        <span class="pill pill-update hidden" id="update-pill">update</span>
         <span class="pill" id="status-pill" data-state="disconnected">disconnected</span>
       </div>
     </header>
 
     <main>
-      <!-- ================= HOME (hero → badge → toggle → status → IP → mode) ==== -->
+      <!-- ================= HOME (hero → badge → toggle → status → IP → update → mode) ==== -->
       <section id="view-home" class="view">
         <div class="home-stack">
           <!-- 1. hero wordmark — the branding on Home (top bar is hidden) -->
@@ -53,6 +54,23 @@
             <div class="ip-row">
               <span class="ip-flag hidden" id="ip-flag"></span>
               <span class="ip-value mono" id="ip-value">—</span>
+            </div>
+          </div>
+
+          <!-- 5b. update card (stable channel) — same wording and badge
+               position as the Android shell; hidden until update_check
+               reports one. Install → download (bytes shown) → confirm the
+               replace-and-restart; the backend never swaps the exe unasked. -->
+          <div class="card update-card hidden" id="update-card">
+            <div class="update-row">
+              <span class="update-ver" id="update-ver">update available</span>
+              <button class="btn-primary btn-update" id="btn-update-install" type="button">Install</button>
+            </div>
+            <div class="update-msg hidden" id="update-msg"></div>
+            <div class="btn-row hidden" id="update-actions">
+              <button class="btn-ghost" id="btn-update-later" type="button">Later</button>
+              <button class="btn-ghost" id="btn-update-retry" type="button">Retry</button>
+              <button class="btn-ghost" id="btn-update-page" type="button">Open release page</button>
             </div>
           </div>
 

@@ -6,6 +6,14 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!--
+      Self-updater: a sideloaded app cannot install silently, so the update
+      flow hands the verified APK to the system installer, which requires
+      this permission before it will offer "install from this app" at all.
+      The install-unknown-apps grant itself is checked at handoff time
+      (PackageManager.canRequestPackageInstalls).
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:allowBackup="true"
@@ -66,5 +74,22 @@
                 android:name="android.service.quicksettings.ACTIVE_TILE"
                 android:value="true" />
         </service>
+
+        <!--
+          Serves the verified update APK from cacheDir to the system
+          installer: ACTION_VIEW can only carry a content:// URI, and the
+          only way to mint one is this provider. It exposes nothing but
+          <cache-path name="updates"> (res/xml/file_paths.xml) and the URI
+          is granted read permission for the single install intent.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

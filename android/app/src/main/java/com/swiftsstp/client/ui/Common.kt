@@ -37,6 +37,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -64,6 +65,7 @@ import androidx.compose.ui.unit.sp
 import com.swiftsstp.client.R
 import com.swiftsstp.client.VpnController
 import com.swiftsstp.client.model.Profile
+import com.swiftsstp.client.net.UpdateChecker
 
 /** Human byte counts: "812 B", "1.2 MB", "3.04 GB". */
 fun formatBytes(v: Long): String = when {
@@ -84,13 +86,21 @@ enum class NavTab { HOME, PROFILES, STATS, LOG }
 
 /**
  * Slim shared top bar — brand mark, "SwiftSSTP"
- * wordmark with the "SSTP client" caption, and the status `.pill` on the
+ * wordmark with the "SSTP client" caption, the running version, the UPDATE
+ * pill when a newer stable release exists, and the status `.pill` on the
  * right. Navigation moved to the bottom bar, so this is one row only.
  *
  * [showBrand] = false (Home) draws nothing visible but keeps the slot and
  * its status-bar inset: Scaffold derives the content inset from the topBar's
  * height, so an inset-only zero-height box preserves today's layout while
- * letting the hero wordmark own the top of the screen.
+ * letting the hero wordmark own the top of the screen. Home's update offer
+ * lives in its own card there (see HomeScreen's UpdateCard).
+ *
+ * The caption is the flexible slot: at 360dp the wordmark, the version, the
+ * UPDATE pill and the state chip do not all fit on one line, so the caption
+ * yields its space — ellipsizing when it is the only overflow, disappearing
+ * entirely while the pill is up. The state chip never shrinks: it is the
+ * one thing on this row the user acts on.
  */
 @Composable
 fun SwiftSSTPTopBar(
@@ -102,6 +112,7 @@ fun SwiftSSTPTopBar(
         Box(modifier.fillMaxWidth().statusBarsPadding())
         return
     }
+    val update by UpdateChecker.state.collectAsState()
     Column(modifier.fillMaxWidth().background(FieldBackground)) {
         // Edge-to-edge: Scaffold does not pad custom topBar composables, so
         // the brand row must apply the status-bar inset itself the way
@@ -120,7 +131,7 @@ fun SwiftSSTPTopBar(
                 modifier = Modifier.size(22.dp),
             )
             Spacer(Modifier.width(9.dp))
-            Row(verticalAlignment = Alignment.Bottom) {
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
                 Text(
                     text = "SwiftSSTP",
                     style = TextStyle(
@@ -129,14 +140,41 @@ fun SwiftSSTPTopBar(
                         letterSpacing = 0.3.sp,
                     ),
                 )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = "SSTP client",
-                    style = TextStyle(fontSize = 12.sp),
-                    color = TextMuted,
+                if (!update.updateAvailable) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "SSTP client",
+                        style = TextStyle(fontSize = 12.sp),
+                        color = TextMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            // What the user is running, always visible: an update is only
+            // actionable next to the version it replaces. "dev" marks a
+            // build CI did not stamp, which the checker never upgrades.
+            Text(
+                text = update.versionLabel,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                color = TextMuted,
+                maxLines = 1,
+            )
+            if (update.updateAvailable) {
+                Spacer(Modifier.width(10.dp))
+                // Tapping re-checks: the debounce collapses a burst, and a
+                // 304 costs the CDN nothing.
+                InfoChip(
+                    text = "UPDATE",
+                    color = Orange,
+                    modifier = Modifier.clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { UpdateChecker.refresh() },
+                    ),
                 )
             }
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.width(10.dp))
             StateChip(state)
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(Hairline))
