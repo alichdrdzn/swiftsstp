@@ -171,39 +171,24 @@ main { padding: 16px 16px 84px; max-width: 1280px; width: 100%; margin: 0 auto; 
   gap: 22px;
   min-height: calc(100vh - 100px); /* main's 16px top + 84px bottom padding */
 }
-/* Hero wordmark: hard-stop faceted white gradient plus thin diagonal
-   streaks, clipped to the glyphs — bright and hard-edged, never flat.
-   The grey stops are the facets: pure white bands interrupted by cooler
-   silver ones so the letters keep their bevelled, cut-metal look on the
-   pure black page. */
+/* Hero wordmark: flat white, uppercase, heavy — the app logo is a fat
+   rounded white S on black with no texture, and the hero has to read as
+   the same mark family. The text stroke adds the logo's chunk (fill and
+   stroke share the colour, so paint order cannot matter); the heavy
+   family stack keeps the letterforms geometric on any Windows box. */
 .hero-brand {
   margin-top: auto;
   display: inline-block;
+  font-family: "Segoe UI Black", "Arial Black", "Segoe UI", system-ui, sans-serif;
   font-size: 46px;
   font-weight: 900;
   letter-spacing: 2px;
   text-transform: uppercase;
-  line-height: 1;
+  line-height: 1.1;
   white-space: nowrap;
   user-select: none;
-  background:
-    repeating-linear-gradient(115deg,
-      rgba(0, 0, 0, .28) 0 2px,
-      rgba(255, 255, 255, .20) 2px 3px,
-      transparent 3px 9px),
-    linear-gradient(100deg,
-      #ffffff 0%,  #ffffff 7%,
-      #e6e6e6 7%,  #e6e6e6 20%,
-      #cfcfcf 20%, #cfcfcf 32%,
-      #f4f4f4 32%, #f4f4f4 43%,
-      #e6e6e6 43%, #e6e6e6 62%,
-      #ffffff 62%, #ffffff 73%,
-      #cfcfcf 73%, #cfcfcf 87%,
-      #e6e6e6 87%, #e6e6e6 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
+  color: #fff;
+  -webkit-text-stroke: 3px #fff;
 }
 /* Badge label lives for screen readers only — the orange pill is
    self-describing. */
