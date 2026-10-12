@@ -35,9 +35,11 @@
           <!-- 2. profile picker (label kept for screen readers only).
                A custom dropdown, not a native <select>: the OS draws the
                option popup at content width and ignores the pill. The
-               list is anchored to the trigger at width:100%, so list and
-               trigger are the same size by construction. It only picks a
-               profile — the toggle below is the one connect control. -->
+               list is a block child of the pill's own wrapper, so it
+               opens directly below the field at exactly the pill's width
+               and pushes the connect toggle down instead of covering it.
+               It only picks a profile — the toggle below is the one
+               connect control. -->
           <div class="home-profile profile-dropdown" id="conn-profile">
             <label class="visually-hidden" for="conn-profile-trigger">Profile</label>
             <button type="button" class="input profile-pill" id="conn-profile-trigger"

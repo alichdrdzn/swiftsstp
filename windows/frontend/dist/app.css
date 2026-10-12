@@ -256,16 +256,23 @@ main { padding: 16px 16px 84px; max-width: 1280px; width: 100%; margin: 0 auto; 
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-/* The list is anchored to the trigger with width:100%, so it is the
-   same size as the pill by construction — the whole reason this is not
-   a native <select> (whose popup the OS sizes itself). */
-.profile-dropdown { position: relative; width: 100%; }
+/* The list sits IN the flow of the pill's own column instead of floating
+   over the page: absolutely positioned, it opened 6px under the pill and
+   landed straight on the connect toggle, which lives 22px below it. In
+   flow, opening the list pushes the toggle and everything under it down,
+   so nothing is ever covered, and the page scrolls if a long list does
+   not fit the window. List and trigger stay the same width and the same
+   alignment because both are block children of the one wrapper that
+   .home-profile sizes to min(300px, 100%) — do not put a width on
+   .profile-dropdown: it is declared later than .home-profile and would
+   quietly win, stretching the pill and the list to the full column. */
+.profile-dropdown { position: relative; }
 .profile-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
+  display: block;
   width: 100%;
-  max-height: 260px;
+  /* Responsive cap: a full 260px in a tall window, a share of the
+     viewport in a short one, always scrollable inside. */
+  max-height: min(260px, 45vh);
   overflow-y: auto;
   margin: 0;
   padding: 6px;
@@ -274,7 +281,6 @@ main { padding: 16px 16px 84px; max-width: 1280px; width: 100%; margin: 0 auto; 
   border: 1px solid var(--border);
   border-radius: 14px;
   box-shadow: var(--shadow);
-  z-index: 30;
 }
 .profile-option {
   display: flex;
