@@ -6,6 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.net.VpnService
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import com.swiftsstp.client.AppModel
@@ -37,6 +39,7 @@ import kotlinx.coroutines.launch
 class SwiftSSTPTileService : TileService() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val handler = Handler(Looper.getMainLooper())
     private var listenJob: Job? = null
 
     override fun onCreate() {
@@ -64,6 +67,7 @@ class SwiftSSTPTileService : TileService() {
     }
 
     override fun onDestroy() {
+        handler.removeCallbacksAndMessages(null)
         scope.cancel()
         super.onDestroy()
     }
@@ -73,7 +77,11 @@ class SwiftSSTPTileService : TileService() {
         val s = VpnController.snapshot.value
         if (SwiftSSTPVpnService.isRunning() || s.active) {
             VpnController.stop()
-            render(VpnController.snapshot.value)
+            // The stop is asynchronous — the service tears itself down on
+            // its own handler thread — so the snapshot still reads
+            // CONNECTED here. Drop the light immediately instead of
+            // re-rendering that stale value.
+            forceInactive()
             return
         }
         // Connecting may need the consent dialog; on a locked device the
@@ -134,12 +142,19 @@ class SwiftSSTPTileService : TileService() {
         }
     }
 
-    /** Mirrors the tunnel state into the tile. */
+    /**
+     * Mirrors the tunnel state into the tile.
+     *
+     * Only the snapshot decides — never [SwiftSSTPVpnService.isRunning].
+     * The service object outlives the tunnel for a few milliseconds after
+     * the session settles (`stopEverything()` requests the refresh before
+     * `stopSelf()` reaches `onDestroy()`), so OR-ing `isRunning()` in made
+     * the final refresh paint STATE_ACTIVE with nothing left to correct
+     * it: the tile then stayed lit long after the VPN was down.
+     */
     private fun render(s: VpnController.Snapshot) {
         val tile = qsTile ?: return
-        tile.state =
-            if (SwiftSSTPVpnService.isRunning() || s.active) Tile.STATE_ACTIVE
-            else Tile.STATE_INACTIVE
+        tile.state = if (s.active) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             tile.subtitle = when (s.state) {
                 VpnController.State.CONNECTED -> getString(R.string.tile_connected)
@@ -153,9 +168,31 @@ class SwiftSSTPTileService : TileService() {
         tile.updateTile()
     }
 
+    /**
+     * Optimistic "off" for a stop the snapshot has not reported yet.
+     *
+     * A stop is a request, not a guarantee: [RECONCILE_MS] later the
+     * snapshot is read again, so a teardown that never happened cannot
+     * leave the tile dark over a tunnel that is in fact still up.
+     */
+    private fun forceInactive() {
+        val tile = qsTile ?: return
+        tile.state = Tile.STATE_INACTIVE
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            tile.subtitle = getString(R.string.tile_disconnected)
+        }
+        tile.updateTile()
+        handler.removeCallbacks(reconcile)
+        handler.postDelayed(reconcile, RECONCILE_MS)
+    }
+
+    private val reconcile = Runnable { render(VpnController.snapshot.value) }
+
     companion object {
         private const val RC_OPEN = 0
         private const val RC_OPEN_CONNECT = 1
+        /** Grace before an optimistic "off" is reconciled with the snapshot. */
+        private const val RECONCILE_MS = 2500L
 
         /**
          * Called by the VPN service on state changes so a visible tile
