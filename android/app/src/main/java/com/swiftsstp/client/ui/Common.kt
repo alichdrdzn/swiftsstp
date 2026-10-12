@@ -49,6 +49,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -78,17 +79,8 @@ fun formatRate(v: Long): String = when {
     else -> "$v B/s"
 }
 
-/** Blue → violet action gradient — mirrors Windows `.btn-primary`. */
-val PrimaryGradient = Brush.horizontalGradient(listOf(AccentBlue, AccentViolet))
-
-/** Red action gradient — mirrors Windows `.btn-primary.disconnect`. */
-val DisconnectGradient = Brush.horizontalGradient(listOf(Color(0xFFFF5F6D), Color(0xFFFF2D55)))
-
 /** Which bottom-bar tab is on screen; the four root tabs of the app. */
 enum class NavTab { HOME, PROFILES, STATS, LOG }
-
-/** Style of the one big action button. */
-enum class ButtonVariant { PRIMARY, DISCONNECT }
 
 /**
  * Slim shared top bar — brand mark, "SwiftSSTP"
@@ -153,7 +145,7 @@ fun SwiftSSTPTopBar(
 
 /**
  * Bottom navigation — icon + label per tab,
- * the active one tinted with the accent blue on a faint accent pill.
+ * the active one in white on a faint white pill.
  */
 @Composable
 fun SwiftSSTPBottomBar(
@@ -194,11 +186,11 @@ private fun RowScope.TabBarItem(
         },
         label = { Text(label, style = MaterialTheme.typography.labelMedium) },
         colors = NavigationBarItemDefaults.colors(
-            selectedIconColor = AccentBlue,
-            selectedTextColor = AccentBlue,
+            selectedIconColor = Color.White,
+            selectedTextColor = Color.White,
             unselectedIconColor = TextMuted,
             unselectedTextColor = TextMuted,
-            indicatorColor = AccentBlue.copy(alpha = 0.14f),
+            indicatorColor = Color.White.copy(alpha = 0.12f),
         ),
     )
 }
@@ -414,37 +406,36 @@ private fun DashedRule() {
 }
 
 /**
- * The one gradient action button — mirrors Windows `.btn-primary` (blue →
- * violet, white bold label, glow) and, as [ButtonVariant.DISCONNECT], its
- * red `.disconnect` sibling; [busy] reproduces `.btn-primary.busy` (dimmed,
- * still tappable — it is the Stop button).
+ * The one primary action button — a solid white pill with a bold near-black
+ * label, mirroring Windows `.btn-primary` (999px radius, neutral black
+ * shadow rather than the old accent glow). [busy] reproduces
+ * `.btn-primary.busy` (dimmed, still tappable — it is the Stop button), and
+ * a pressed press scales and dims slightly so a tap reads without any hue.
  */
 @Composable
-fun GradientButton(
+fun PrimaryButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    variant: ButtonVariant = ButtonVariant.PRIMARY,
     busy: Boolean = false,
     enabled: Boolean = true,
     height: Dp = 56.dp,
     fontSize: TextUnit = 16.sp,
 ) {
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RoundedCornerShape(999.dp)
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val dim = (if (busy) 0.78f else 1f) * (if (pressed) 0.92f else 1f)
-    val (start, end) = when (variant) {
-        ButtonVariant.PRIMARY -> AccentBlue to AccentViolet
-        ButtonVariant.DISCONNECT -> Color(0xFFFF5F6D) to Color(0xFFFF2D55)
-    }
-    val glow = if (variant == ButtonVariant.PRIMARY) AccentBlue else Color(0xFFFF2D55)
     Box(
         modifier = modifier
             .height(height)
-            .shadow(if (enabled) 10.dp else 0.dp, shape, ambientColor = glow, spotColor = glow)
+            .graphicsLayer {
+                scaleX = if (pressed) 0.98f else 1f
+                scaleY = if (pressed) 0.98f else 1f
+            }
+            .shadow(if (enabled) 10.dp else 0.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
             .clip(shape)
-            .background(Brush.horizontalGradient(listOf(start.copy(alpha = dim), end.copy(alpha = dim))))
+            .background(Color.White.copy(alpha = dim))
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -456,7 +447,7 @@ fun GradientButton(
     ) {
         Text(
             text = text,
-            color = Color.White.copy(alpha = if (enabled) 1f else 0.5f),
+            color = Color(0xFF0B0B0B).copy(alpha = if (enabled) 1f else 0.5f),
             style = TextStyle(fontSize = fontSize, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.3.sp),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -466,7 +457,7 @@ fun GradientButton(
 
 /**
  * Outline button — mirrors Windows `.btn-ghost` (transparent, 1px
- * `--border-2`, muted bold label, accent border on interaction).
+ * `--border-2`, muted bold label, neutral white border on interaction).
  */
 @Composable
 fun GhostButton(
@@ -478,10 +469,10 @@ fun GhostButton(
     height: Dp = 34.dp,
     fontSize: TextUnit = 13.sp,
 ) {
-    val shape = RoundedCornerShape(9.dp)
+    val shape = RoundedCornerShape(999.dp)
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
-    val borderColor = if (pressed && enabled) AccentBlue else Hairline2
+    val borderColor = if (pressed && enabled) TextPrimary else Hairline2
     val color = when {
         !enabled -> contentColor.copy(alpha = 0.4f)
         pressed -> TextPrimary

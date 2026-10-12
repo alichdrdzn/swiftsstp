@@ -9,8 +9,6 @@
   --border-2: #2c3850;
   --text: #e7edf8;
   --muted: #8b96ab;
-  --accent: #4f8cff;
-  --accent-2: #7c5cff;
   --green: #2fd08c;
   --amber: #ffb454;
   --red: #ff6b6b;
@@ -86,10 +84,11 @@ html, body {
 .nav-item svg { width: 20px; height: 20px; display: block; }
 .nav-item span { line-height: 1; }
 .nav-item:hover { color: var(--text); }
-/* Faint accent pill behind the icon marks the active tab. z-index:-1 keeps
-   it under the icon while the nav's own stacking context keeps it above the
-   bar background. */
-.nav-item.active { color: var(--accent); }
+/* Faint white pill behind the icon marks the active tab; the icon itself
+   goes pure white so the current tab reads without any hue. z-index:-1
+   keeps it under the icon while the nav's own stacking context keeps it
+   above the bar background. */
+.nav-item.active { color: #fff; }
 .nav-item.active::before {
   content: "";
   position: absolute;
@@ -99,7 +98,7 @@ html, body {
   width: 54px;
   height: 32px;
   border-radius: 999px;
-  background: rgba(79, 140, 255, .14);
+  background: rgba(255, 255, 255, .12);
   z-index: -1;
 }
 .topbar-right { margin-left: auto; }
@@ -172,8 +171,11 @@ main { padding: 16px 16px 84px; max-width: 1280px; width: 100%; margin: 0 auto; 
   gap: 22px;
   min-height: calc(100vh - 100px); /* main's 16px top + 84px bottom padding */
 }
-/* Hero wordmark: hard-stop faceted red-orange gradient plus thin diagonal
-   streaks, clipped to the glyphs — fiery and hard-edged, never flat. */
+/* Hero wordmark: hard-stop faceted white gradient plus thin diagonal
+   streaks, clipped to the glyphs — bright and hard-edged, never flat.
+   The grey stops are the facets: pure white bands interrupted by cooler
+   silver ones so the letters keep their bevelled, cut-metal look on the
+   pure black page. */
 .hero-brand {
   margin-top: auto;
   display: inline-block;
@@ -186,18 +188,18 @@ main { padding: 16px 16px 84px; max-width: 1280px; width: 100%; margin: 0 auto; 
   user-select: none;
   background:
     repeating-linear-gradient(115deg,
-      rgba(0, 0, 0, .30) 0 2px,
-      rgba(255, 235, 200, .16) 2px 3px,
+      rgba(0, 0, 0, .28) 0 2px,
+      rgba(255, 255, 255, .20) 2px 3px,
       transparent 3px 9px),
     linear-gradient(100deg,
-      #e01b00 0%,  #e01b00 7%,
-      #ff5a00 7%,  #ff5a00 20%,
-      #ff9e2c 20%, #ff9e2c 32%,
-      #ffb347 32%, #ffb347 43%,
-      #ff5a00 43%, #ff5a00 62%,
-      #e01b00 62%, #e01b00 73%,
-      #ff9e2c 73%, #ff9e2c 87%,
-      #e01b00 87%, #e01b00 100%);
+      #ffffff 0%,  #ffffff 7%,
+      #e6e6e6 7%,  #e6e6e6 20%,
+      #cfcfcf 20%, #cfcfcf 32%,
+      #f4f4f4 32%, #f4f4f4 43%,
+      #e6e6e6 43%, #e6e6e6 62%,
+      #ffffff 62%, #ffffff 73%,
+      #cfcfcf 73%, #cfcfcf 87%,
+      #e6e6e6 87%, #e6e6e6 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -254,9 +256,9 @@ main { padding: 16px 16px 84px; max-width: 1280px; width: 100%; margin: 0 auto; 
    nothing here ever pulses as a whole. */
 .connect-toggle {
   position: relative;
-  width: 300px;
+  width: 220px;
   max-width: 100%;
-  height: 96px;
+  height: 76px;
   padding: 0;
   border-radius: 999px;
   background: #26262c;
@@ -269,8 +271,8 @@ main { padding: 16px 16px 84px; max-width: 1280px; width: 100%; margin: 0 auto; 
   position: absolute;
   top: 8px;
   left: 8px;
-  width: 80px;
-  height: 80px;
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 6px 18px rgba(0, 0, 0, .5);
@@ -282,7 +284,7 @@ main { padding: 16px 16px 84px; max-width: 1280px; width: 100%; margin: 0 auto; 
 }
 .connect-toggle[data-state="connected"]::before,
 .connect-toggle[data-state="connecting"]::before,
-.connect-toggle[data-state="reconnecting"]::before { left: calc(100% - 88px); }
+.connect-toggle[data-state="reconnecting"]::before { left: calc(100% - 68px); }
 .connect-toggle[data-state="connecting"],
 .connect-toggle[data-state="reconnecting"] {
   background: #6b4409;
@@ -301,7 +303,7 @@ main { padding: 16px 16px 84px; max-width: 1280px; width: 100%; margin: 0 auto; 
 }
 .connect-toggle:disabled,
 .connect-toggle.busy { cursor: wait; }
-.connect-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.connect-toggle:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 
 /* status word — pure white; the toggle below/above carries the state colour */
 .home-state { text-align: center; }
@@ -379,7 +381,7 @@ main { padding: 16px 16px 84px; max-width: 1280px; width: 100%; margin: 0 auto; 
   cursor: pointer;
   transition: color .15s;
 }
-.seg.active { color: #fff; }
+.seg.active { color: #0b0b0b; }
 .seg-thumb {
   position: absolute;
   top: 4px;
@@ -387,9 +389,11 @@ main { padding: 16px 16px 84px; max-width: 1280px; width: 100%; margin: 0 auto; 
   left: 4px;
   width: calc(50% - 6px);
   border-radius: 9px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  /* Solid white thumb: it is the highlighted choice, so it borrows the
+     page's own contrast instead of a hue; the dark label sits on top of it. */
+  background: #fff;
   transition: transform .18s ease;
-  box-shadow: 0 4px 14px rgba(79, 140, 255, .4);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .45);
 }
 .segmented[data-mode="tunnel"] .seg-thumb { transform: translateX(calc(100% + 4px)); }
 
@@ -397,29 +401,31 @@ main { padding: 16px 16px 84px; max-width: 1280px; width: 100%; margin: 0 auto; 
 .btn-primary {
   border: 0;
   cursor: pointer;
-  border-radius: 12px;
+  border-radius: 999px;
   padding: 13px 34px;
   font-size: 16px;
   font-weight: 800;
-  color: #fff;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  box-shadow: 0 10px 26px rgba(79, 140, 255, .4);
-  transition: transform .12s, box-shadow .12s, filter .12s;
+  /* White pill: the fill itself is the emphasis, so hover only cools it a
+     shade and lifts it — no coloured glow to fight the black page. */
+  color: #0b0b0b;
+  background: #fff;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .45);
+  transition: transform .12s, background-color .12s, box-shadow .12s;
 }
-.btn-primary:hover { transform: translateY(-1px); filter: brightness(1.08); }
+.btn-primary:hover { transform: translateY(-1px); background: #e9e9e9; }
 .btn-primary:active { transform: translateY(0); }
 .btn-ghost {
   border: 1px solid var(--border-2);
   background: transparent;
   color: var(--muted);
-  border-radius: 9px;
+  border-radius: 999px;
   padding: 7px 14px;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   transition: .15s;
 }
-.btn-ghost:hover { color: var(--text); border-color: var(--accent); }
+.btn-ghost:hover { color: var(--text); border-color: var(--text); }
 .btn-ghost.small { padding: 3px 9px; font-size: 11px; }
 .btn-row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 
@@ -494,9 +500,11 @@ main { padding: 16px 16px 84px; max-width: 1280px; width: 100%; margin: 0 auto; 
   font-weight: 700;
   padding: 3px 8px;
   border-radius: 999px;
-  background: rgba(79, 140, 255, .14);
-  border: 1px solid rgba(79, 140, 255, .4);
-  color: #9cc0ff;
+  /* Neutral chip: tags describe the profile, they are not a status, so
+     only .warn/.tag.ok get to carry a hue. */
+  background: rgba(255, 255, 255, .08);
+  border: 1px solid rgba(255, 255, 255, .20);
+  color: var(--text);
 }
 .tag.warn { background: rgba(255, 180, 84, .12); border-color: rgba(255, 180, 84, .45); color: var(--amber); }
 .tag.ok { background: rgba(47, 208, 140, .12); border-color: rgba(47, 208, 140, .45); color: var(--green); }
@@ -529,7 +537,7 @@ main { padding: 16px 16px 84px; max-width: 1280px; width: 100%; margin: 0 auto; 
   outline: none;
   transition: border-color .15s, box-shadow .15s;
 }
-.input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79, 140, 255, .18); }
+.input:focus { border-color: #fff; box-shadow: 0 0 0 3px rgba(255, 255, 255, .16); }
 .select { appearance: auto; }
 .textarea { resize: vertical; line-height: 1.5; }
 .field-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -558,8 +566,10 @@ main { padding: 16px 16px 84px; max-width: 1280px; width: 100%; margin: 0 auto; 
   background: var(--muted);
   transition: .18s;
 }
-.switch input:checked + span { background: linear-gradient(135deg, var(--accent), var(--accent-2)); border-color: transparent; }
-.switch input:checked + span::after { left: 19px; background: #fff; }
+/* Checked track goes white so it matches the rest of the chrome; the knob
+   inverts to near-black to stay legible against it. */
+.switch input:checked + span { background: #fff; border-color: transparent; }
+.switch input:checked + span::after { left: 19px; background: #0b0b0b; }
 
 /* ---- tunnels: per-session chips + stepper ---- */
 .session-chips {

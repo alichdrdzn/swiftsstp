@@ -167,7 +167,7 @@ fun ProfileEditorScreen(
                     }
                 },
                 actions = {
-                    GradientButton(
+                    PrimaryButton(
                         text = "Save",
                         onClick = { onSave(buildProfile()) },
                         enabled = canSave,
@@ -524,7 +524,7 @@ private fun StepperValue(value: String) {
         Text(
             text = value,
             style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold),
-            color = AccentBlue,
+            color = TextPrimary,
         )
     }
 }

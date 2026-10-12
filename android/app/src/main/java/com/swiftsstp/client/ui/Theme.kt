@@ -11,10 +11,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 // Palette lifted from the Windows client (windows/frontend/dist/app.css
-// `:root`): pure-black canvas, blue → violet accent gradient, mint for the
-// connected state, orange for the Home hero family. Deliberately dark-only —
-// a VPN console reads better without a white flash when the tunnel drops at
-// night, and true black keeps the shell seamless with the status bar.
+// `:root`): pure-black canvas, white/neutral accents for anything that
+// used to be blue → violet, mint for the connected state, orange for the
+// Home hero family. Deliberately dark-only — a VPN console reads better
+// without a white flash when the tunnel drops at night, and true black
+// keeps the shell seamless with the status bar.
 val Ink = Color(0xFF000000) // --bg
 val Surface1 = Color(0xFF131A26) // --card
 val Surface2 = Color(0xFF172031) // --card-2
@@ -23,8 +24,6 @@ val Hairline = Color(0xFF232C3D) // --border
 val Hairline2 = Color(0xFF2A3446) // --border-2 (ghost buttons, inputs)
 val TextPrimary = Color(0xFFE7EDF8) // --text
 val TextMuted = Color(0xFF8B96AB) // --muted
-val AccentBlue = Color(0xFF4F8CFF) // --accent
-val AccentViolet = Color(0xFF7C5CFF) // --accent-2
 val Mint = Color(0xFF2FD08C) // --green
 val Amber = Color(0xFFFFB454) // --amber
 val Rose = Color(0xFFFF6B6B) // --red
@@ -38,10 +37,13 @@ val WellBackground = Color(0xFF0A0E15)
 val FieldBackground = Color(0xFF0E1420)
 
 private val SwiftSSTPColours = darkColorScheme(
-    primary = AccentBlue,
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFF1C2B45),
-    onPrimaryContainer = Color(0xFFD8E6FF),
+    // White primary flips every Material 3 control (Switch, checkbox,
+    // text-field focus ring, selection) to white-on-black, matching the
+    // connect toggle's knob.
+    primary = Color.White,
+    onPrimary = Color.Black,
+    primaryContainer = Color(0xFF1E1E22),
+    onPrimaryContainer = Color(0xFFF2F2F5),
     secondary = Mint,
     onSecondary = Color(0xFF00201A),
     secondaryContainer = Color(0xFF14352C),

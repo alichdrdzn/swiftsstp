@@ -26,23 +26,24 @@ import kotlin.math.max
 private const val SCALE = 3
 
 /**
- * Hard-edged fiery stops — deep red → orange → amber → back. Adjacent equal
- * stops make flat facets with hard seams instead of a smooth two-colour wash,
- * which is the whole point of the wordmark.
+ * Hard-edged neutral stops — white → light grey → mid grey → back. Adjacent
+ * equal stops make flat facets with hard seams instead of a smooth two-colour
+ * wash, which is the whole point of the wordmark: hue is gone, but the cut
+ * planes remain, so the letters read as lit white rather than flat fill.
  */
 private val FacetColors = intArrayOf(
-    0xFFE01B00.toInt(),
-    0xFFE01B00.toInt(),
-    0xFFFF5A00.toInt(),
-    0xFFFF5A00.toInt(),
-    0xFFFF9E2C.toInt(),
-    0xFFFF9E2C.toInt(),
-    0xFFE01B00.toInt(),
+    0xFFFFFFFF.toInt(),
+    0xFFFFFFFF.toInt(),
+    0xFFE6E6E6.toInt(),
+    0xFFE6E6E6.toInt(),
+    0xFFCFCFCF.toInt(),
+    0xFFF4F4F4.toInt(),
+    0xFFFFFFFF.toInt(),
 )
 private val FacetStops = floatArrayOf(0f, 0.18f, 0.30f, 0.52f, 0.66f, 0.80f, 1f)
 
 /**
- * Hero brand wordmark — uppercase letters filled with a faceted red-orange
+ * Hero brand wordmark — uppercase letters filled with a faceted white
  * texture plus translucent shards, the app's one piece of ornament.
  *
  * Rendered once into an offscreen bitmap (a DST_IN punch keeps the texture
@@ -106,7 +107,7 @@ private fun renderWordmark(text: String, fontPx: Float): Bitmap {
         floatArrayOf(0.08f, 0.58f, 0.52f, 1.00f, 0.00f, 0.94f),
     )
     shards.forEachIndexed { i, s ->
-        shard.color = if (i % 2 == 0) Color.argb(60, 255, 255, 255) else Color.argb(70, 60, 8, 0)
+        shard.color = if (i % 2 == 0) Color.argb(60, 255, 255, 255) else Color.argb(70, 0, 0, 0)
         canvas.drawPath(
             Path().apply {
                 moveTo(s[0] * w, s[1] * h)
@@ -123,7 +124,7 @@ private fun renderWordmark(text: String, fontPx: Float): Bitmap {
     }
     for (i in 0..9) {
         val y = h * (i / 10f) - h * 0.12f
-        streak.color = if (i % 3 == 0) Color.argb(72, 255, 255, 255) else Color.argb(52, 80, 10, 0)
+        streak.color = if (i % 3 == 0) Color.argb(72, 255, 255, 255) else Color.argb(52, 0, 0, 0)
         canvas.drawLine(-w * 0.08f, y, w * 1.08f, y - w * 0.26f, streak)
     }
 

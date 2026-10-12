@@ -248,9 +248,9 @@ private fun ConnectToggle(
         else -> Color.White.copy(alpha = 0.08f)
     }
 
-    // 248 − 76 knob − 8dp inset each end = 156dp of travel.
+    // 200 − 60 knob − 8dp inset each end = 124dp of travel.
     val knobOffset by animateDpAsState(
-        targetValue = if (active) 156.dp else 0.dp,
+        targetValue = if (active) 124.dp else 0.dp,
         animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMedium),
         label = "connect-toggle-knob",
     )
@@ -269,8 +269,8 @@ private fun ConnectToggle(
 
     Box(
         modifier = Modifier
-            .width(248.dp)
-            .height(92.dp)
+            .width(200.dp)
+            .height(76.dp)
             .graphicsLayer {
                 scaleX = if (pressed) 0.98f else 1f
                 scaleY = if (pressed) 0.98f else 1f
@@ -297,7 +297,7 @@ private fun ConnectToggle(
             modifier = Modifier
                 .padding(start = 8.dp)
                 .offset(x = knobOffset)
-                .size(76.dp)
+                .size(60.dp)
                 .shadow(8.dp, CircleShape)
                 .background(Color.White, CircleShape),
         )

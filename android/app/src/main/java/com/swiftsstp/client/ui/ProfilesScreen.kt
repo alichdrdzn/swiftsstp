@@ -103,7 +103,7 @@ private fun ListHead(subtitle: String, onAdd: () -> Unit) {
             )
         }
         Spacer(Modifier.size(12.dp))
-        GradientButton(
+        PrimaryButton(
             text = "+ New profile",
             onClick = onAdd,
             height = 44.dp,
@@ -148,8 +148,8 @@ private fun ProfileCard(
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 TlsChip(profile.tlsMode)
-                InfoChip(profile.username.ifBlank { "—" }, AccentBlue)
-                if (profile.autoReconnect.enabled) InfoChip("auto-reconnect", AccentBlue)
+                InfoChip(profile.username.ifBlank { "—" }, TextPrimary)
+                if (profile.autoReconnect.enabled) InfoChip("auto-reconnect", TextPrimary)
                 if (profile.proxy.enabled) InfoChip("proxy ${profile.proxy.type}", Amber)
                 if (profile.tunnels > 1) InfoChip("${profile.tunnels} tunnels", Mint)
             }
@@ -161,7 +161,7 @@ private fun ProfileCard(
                 Text(
                     text = "↓ ${formatBytes(usage?.totalDown ?: 0)}",
                     style = MaterialTheme.typography.labelMedium,
-                    color = AccentBlue,
+                    color = TextPrimary,
                 )
                 Text(
                     text = "↑ ${formatBytes(usage?.totalUp ?: 0)}",
@@ -211,7 +211,7 @@ private fun EmptyState(modifier: Modifier = Modifier, onAdd: () -> Unit) {
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.size(20.dp))
-        GradientButton(
+        PrimaryButton(
             text = "New profile",
             onClick = onAdd,
             height = 46.dp,

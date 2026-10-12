@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Launch-window chrome: pure black window, blue accent. -->
+    <!-- Launch-window chrome: pure black window, white accent — the
+         framework controls follow the Material white-on-black scheme. -->
     <color name="ink_background">#000000</color>
-    <color name="accent">#4F8CFF</color>
+    <color name="accent">#FFFFFF</color>
     <!-- The launcher glyph sits on a pure black square. -->
     <color name="launcher_background">#000000</color>
 </resources>

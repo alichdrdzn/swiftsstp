@@ -93,7 +93,7 @@ fun StatsScreen(
                     )
                     if (tunnelsCount > 1) {
                         Spacer(Modifier.height(4.dp))
-                        InfoChip("$tunnelsCount tunnels", AccentBlue)
+                        InfoChip("$tunnelsCount tunnels", TextPrimary)
                     }
                     if (vpn.sessions.isNotEmpty()) {
                         FlowRow(
@@ -191,7 +191,7 @@ private fun SessionChip(s: VpnController.SessionStat) {
                 overflow = TextOverflow.Ellipsis,
             )
             Text("↑" + formatBytes(s.up), style = mono, color = Mint)
-            Text("↓" + formatBytes(s.down), style = mono, color = AccentBlue)
+            Text("↓" + formatBytes(s.down), style = mono, color = TextPrimary)
             Text(
                 text = if (s.ready) "READY" else "DOWN",
                 style = mono.copy(fontSize = 10.sp, letterSpacing = 0.6.sp),
