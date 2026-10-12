@@ -15,9 +15,11 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -190,18 +192,21 @@ private fun packageLabel(context: Context, pkg: String): String = runCatching {
  * in this dialog, whose window has no saved-state owner to restore it from
  * when the phone is rotated mid-choice.
  *
- * Sizing, which is the whole reason this dialog misbehaved once: with
- * [DialogProperties.usePlatformDefaultWidth] = false the platform dialog
- * window drops its wrap-content default and DialogLayout sizes the window
- * to the content's measured size, bounded by the full display. Because the
- * app runs edge-to-edge and [DialogProperties.decorFitsSystemWindows] is
- * false, that window now covers the whole screen *including* the system
- * bars — so the card must place itself: [WindowInsets.safeDrawing] pads it
- * clear of the status bar, the cutout and the navigation bar, the 16dp is
- * its margin, and only then does fillMaxSize claim what is left. The
- * order matters: insets and padding consumed before the final fillMaxSize
- * is what lands the card inside the visible area on any device, with the
- * Cancel / Done row pinned to the bottom of that area and the app list
+ * Sizing, which is the reason this dialog has misbehaved twice: with
+ * [DialogProperties.usePlatformDefaultWidth] = false, DialogLayout
+ * measures the content against the whole display and then calls
+ * window.setLayout(childWidth, childHeight), so the dialog window is
+ * exactly whatever this measures, on a device where the app draws
+ * edge-to-edge. Insetting the Surface was not enough the first time:
+ * padding lives inside its node, so the Surface (card background
+ * included) still measured the full display and the card kept running
+ * under the status and navigation bars. The cap therefore lives on a
+ * transparent wrapper OUTSIDE the card: at most 94% of the screen width
+ * and 84% of its height (a fraction of the display survives even when no
+ * inset is reported, so the window cannot outgrow the screen either way),
+ * then the bars and the cutout, then the keyboard, then a 16dp gap. The
+ * card fills what is left, so it is always fully on screen with the
+ * Cancel / Done row clear of the navigation bar and the app list
  * scrolling in the space between.
  */
 @Composable
@@ -234,73 +239,82 @@ internal fun AppPicker(
             decorFitsSystemWindows = false,
         ),
     ) {
-        Surface(
+        // Wrapper, not card: DialogLayout measures this content against the
+        // whole display and then sizes the dialog window to it, so the screen
+        // cap and the system insets belong here. On the Surface they would sit
+        // inside its node and the card background would still span the display.
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxWidth(0.94f)
+                .fillMaxHeight(0.84f)
                 .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(16.dp)
-                .fillMaxSize(),
-            shape = RoundedCornerShape(18.dp),
-            color = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface,
+                .imePadding()
+                .padding(16.dp),
         ) {
-            Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = onQueryChange,
-                    label = { Text("Search apps") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = when {
-                            apps == null -> "Loading apps…"
-                            visible.isEmpty() -> "No apps match"
-                            else -> "${selected.size} selected"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                shape = RoundedCornerShape(18.dp),
+                color = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+            ) {
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = onQueryChange,
+                        label = { Text("Search apps") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
                     )
-                    GhostButton(
-                        text = "Clear",
-                        onClick = { onSelectedChange(emptyList()) },
-                        enabled = selected.isNotEmpty(),
-                    )
-                }
-                LazyColumn(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    items(visible, key = { it.pkg }) { app ->
-                        AppRow(
-                            app = app,
-                            checked = app.pkg in selected,
-                            onToggle = {
-                                onSelectedChange(
-                                    if (app.pkg in selected) selected - app.pkg
-                                    else selected + app.pkg,
-                                )
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = when {
+                                apps == null -> "Loading apps…"
+                                visible.isEmpty() -> "No apps match"
+                                else -> "${selected.size} selected"
                             },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        GhostButton(
+                            text = "Clear",
+                            onClick = { onSelectedChange(emptyList()) },
+                            enabled = selected.isNotEmpty(),
                         )
                     }
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    GhostButton(text = "Cancel", onClick = onDismiss)
-                    PrimaryButton(
-                        text = "Done",
-                        onClick = onDone,
-                        height = 38.dp,
-                        fontSize = 14.sp,
-                    )
+                    LazyColumn(
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        items(visible, key = { it.pkg }) { app ->
+                            AppRow(
+                                app = app,
+                                checked = app.pkg in selected,
+                                onToggle = {
+                                    onSelectedChange(
+                                        if (app.pkg in selected) selected - app.pkg
+                                        else selected + app.pkg,
+                                    )
+                                },
+                            )
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        GhostButton(text = "Cancel", onClick = onDismiss)
+                        PrimaryButton(
+                            text = "Done",
+                            onClick = onDone,
+                            height = 38.dp,
+                            fontSize = 14.sp,
+                        )
+                    }
                 }
             }
         }
