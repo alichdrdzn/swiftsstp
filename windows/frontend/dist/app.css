@@ -1,7 +1,7 @@
 /* SwiftSSTP — dark, modern, card-based. No build step: plain CSS. */
 
 :root {
-  --bg: #0b0f17;
+  --bg: #000000;
   --bg-2: #0e1420;
   --card: #131a26;
   --card-2: #172031;
@@ -24,10 +24,9 @@
 html, body {
   margin: 0;
   height: 100%;
-  background:
-    radial-gradient(1200px 600px at 85% -10%, rgba(79, 140, 255, .12), transparent 60%),
-    radial-gradient(900px 500px at -10% 110%, rgba(124, 92, 255, .10), transparent 60%),
-    var(--bg);
+  /* Pure black app-wide: no glow gradients — the hero wordmark and the
+     toggle carry all the colour, everything else stays chrome-free. */
+  background: var(--bg);
   color: var(--text);
   font-family: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -57,21 +56,51 @@ html, body {
 .brand-mark img { height: 22px; display: block; }
 .brand-name { font-weight: 700; letter-spacing: .3px; font-size: 17px; }
 .brand-sub { color: var(--muted); font-size: 12px; }
-.nav { display: flex; gap: 6px; margin-left: 8px; }
-.nav-link {
+/* ---- bottom tab bar (fixed; the old topbar nav links moved here) ---- */
+.bottomnav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 66px;
+  display: flex;
+  background: rgba(14, 20, 32, .92);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--border);
+  z-index: 20;
+}
+.nav-item {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   color: var(--muted);
   text-decoration: none;
-  padding: 7px 14px;
-  border-radius: 10px;
+  font-size: 12px;
   font-weight: 600;
-  font-size: 14px;
-  transition: .15s;
+  transition: color .15s;
 }
-.nav-link:hover { color: var(--text); background: var(--card); }
-.nav-link.active {
-  color: #fff;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  box-shadow: 0 6px 18px rgba(79, 140, 255, .35);
+.nav-item svg { width: 20px; height: 20px; display: block; }
+.nav-item span { line-height: 1; }
+.nav-item:hover { color: var(--text); }
+/* Faint accent pill behind the icon marks the active tab. z-index:-1 keeps
+   it under the icon while the nav's own stacking context keeps it above the
+   bar background. */
+.nav-item.active { color: var(--accent); }
+.nav-item.active::before {
+  content: "";
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 54px;
+  height: 32px;
+  border-radius: 999px;
+  background: rgba(79, 140, 255, .14);
+  z-index: -1;
 }
 .topbar-right { margin-left: auto; }
 
@@ -97,7 +126,8 @@ html, body {
 @keyframes pulse { 50% { opacity: .55; } }
 
 /* ---- layout ---- */
-main { padding: 22px; max-width: 1280px; width: 100%; margin: 0 auto; flex: 1; }
+/* Bottom padding keeps content clear of the fixed 66px tab bar. */
+main { padding: 16px 16px 84px; max-width: 1280px; width: 100%; margin: 0 auto; flex: 1; }
 .view.hidden, .hidden { display: none !important; }
 
 .grid {
@@ -105,7 +135,9 @@ main { padding: 22px; max-width: 1280px; width: 100%; margin: 0 auto; flex: 1; }
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
 }
-.editor-grid { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+/* 300px minimums (not 340) so the editor never overflows the ~328px content
+   width of the 360px minimum window; every grid resolves to one column there. */
+.editor-grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
 
 /* ---- cards ---- */
 .card {
@@ -129,101 +161,183 @@ main { padding: 22px; max-width: 1280px; width: 100%; margin: 0 auto; flex: 1; }
 .muted { color: var(--muted); font-weight: 500; }
 .mono { font-family: "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace; }
 
-/* ---- home (selector → orb → state → mode → IP) ---- */
+/* ---- home (hero → badge → toggle → status → IP → mode) ---- */
+/* Auto margins on the hero and the segmented control split the free space
+   above and below, so the wordmark floats around the upper third instead of
+   sticking to the top at any window height. */
 .home-stack {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
-  padding: 26px 0 40px;
+  gap: 22px;
+  min-height: calc(100vh - 100px); /* main's 16px top + 84px bottom padding */
+}
+/* Hero wordmark: hard-stop faceted red-orange gradient plus thin diagonal
+   streaks, clipped to the glyphs — fiery and hard-edged, never flat. */
+.hero-brand {
+  margin-top: auto;
+  display: inline-block;
+  font-size: 46px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  line-height: 1;
+  white-space: nowrap;
+  user-select: none;
+  background:
+    repeating-linear-gradient(115deg,
+      rgba(0, 0, 0, .30) 0 2px,
+      rgba(255, 235, 200, .16) 2px 3px,
+      transparent 3px 9px),
+    linear-gradient(100deg,
+      #e01b00 0%,  #e01b00 7%,
+      #ff5a00 7%,  #ff5a00 20%,
+      #ff9e2c 20%, #ff9e2c 32%,
+      #ffb347 32%, #ffb347 43%,
+      #ff5a00 43%, #ff5a00 62%,
+      #e01b00 62%, #e01b00 73%,
+      #ff9e2c 73%, #ff9e2c 87%,
+      #e01b00 87%, #e01b00 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+/* Badge label lives for screen readers only — the orange pill is
+   self-describing. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 .home-profile {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  width: min(340px, 100%);
+  width: min(300px, 100%);
 }
-.home-profile .field-label { margin: 0; text-align: center; }
-.profile-pill {
+/* Orange pill dropdown. Selector beats the generic .input rules so the
+   badge keeps its own background, border and chevron. */
+.select.profile-pill {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  padding: 10px 40px 10px 16px;
   border-radius: 999px;
-  padding: 9px 16px;
+  border: 1px solid rgba(255, 122, 24, .55);
+  background: rgba(255, 122, 24, .14)
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'><path d='M2 4.5l4 3.5 4-3.5' fill='none' stroke='%23ffa04a' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>")
+    no-repeat right 16px center / 12px 12px;
+  color: #ffa04a;
   font-weight: 700;
+  font-size: 14px;
   text-align: center;
+  text-align-last: center;
   cursor: pointer;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
 }
+.select.profile-pill:focus {
+  border-color: rgba(255, 122, 24, .85);
+  box-shadow: 0 0 0 3px rgba(255, 122, 24, .18);
+}
+/* Native option popup is OS-drawn; this hint keeps it dark where the
+   platform honours it (WebView2 honours option colours). */
+.profile-pill option { background: #131a26; color: #e7edf8; }
 
-/* big circular connect control — the only connect button */
-.connect-orb {
-  width: 190px;
-  height: 190px;
+/* Large pill toggle — the only connect/disconnect control. The white knob
+   slides left (off) / right (on); the track colour carries the state, so
+   nothing here ever pulses as a whole. */
+.connect-toggle {
+  position: relative;
+  width: 300px;
+  max-width: 100%;
+  height: 96px;
+  padding: 0;
+  border-radius: 999px;
+  background: #26262c;
+  border: 1px solid rgba(255, 255, 255, .08);
+  cursor: pointer;
+  transition: background-color .3s ease, border-color .3s ease;
+}
+.connect-toggle::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 80px;
+  height: 80px;
   border-radius: 50%;
-  background: var(--card);
-  border: 2px solid var(--border);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 18px 44px rgba(0, 0, 0, .45);
-  transition: transform .16s ease, box-shadow .25s ease,
-              border-color .2s ease, color .2s ease, filter .2s ease;
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .5);
+  transition: left .3s cubic-bezier(.34, 1.4, .64, 1);
 }
-.connect-orb:hover:not(:disabled) { transform: translateY(-3px); filter: brightness(1.12); }
-.connect-orb:active:not(:disabled) { transform: translateY(0); }
-.connect-orb:disabled,
-.connect-orb.busy { cursor: wait; filter: saturate(.8) brightness(.92); }
-.connect-orb .orb-icon { display: block; }
-.connect-orb[data-state="connected"] {
-  border-color: var(--green);
-  color: var(--green);
-  box-shadow: 0 0 40px rgba(47, 208, 140, .35);
+.connect-toggle[data-state="connected"] {
+  background: #10623f;
+  border-color: rgba(47, 208, 140, .6);
 }
-.connect-orb[data-state="connecting"],
-.connect-orb[data-state="reconnecting"] {
-  border-color: var(--amber);
-  color: var(--amber);
-  animation: orb-pulse 1.4s ease-in-out infinite;
+.connect-toggle[data-state="connected"]::before,
+.connect-toggle[data-state="connecting"]::before,
+.connect-toggle[data-state="reconnecting"]::before { left: calc(100% - 88px); }
+.connect-toggle[data-state="connecting"],
+.connect-toggle[data-state="reconnecting"] {
+  background: #6b4409;
+  border-color: rgba(255, 180, 84, .6);
+  animation: toggle-breathe 1.6s ease-in-out infinite;
 }
-.connect-orb[data-state="error"],
-.connect-orb[data-state="auth_error"] {
-  border-color: var(--red);
-  color: var(--red);
+/* Only the border breathes while a stop/connect is in flight. */
+@keyframes toggle-breathe {
+  0%, 100% { border-color: rgba(255, 180, 84, .6); }
+  50%      { border-color: rgba(255, 180, 84, .22); }
 }
-@keyframes orb-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 180, 84, .40); }
-  50%      { box-shadow: 0 0 0 20px rgba(255, 180, 84, 0); }
+.connect-toggle[data-state="error"],
+.connect-toggle[data-state="auth_error"] {
+  background: #6b1f1f;
+  border-color: rgba(255, 107, 107, .6);
 }
+.connect-toggle:disabled,
+.connect-toggle.busy { cursor: wait; }
+.connect-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
-/* state text under the circle */
+/* status word — pure white; the toggle below/above carries the state colour */
 .home-state { text-align: center; }
-.state-big { font-size: 24px; font-weight: 800; letter-spacing: .4px; line-height: 1.25; }
+.state-big { font-size: 24px; font-weight: 800; letter-spacing: .4px; line-height: 1.25; color: #fff; }
 .state-sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+.state-sub.err { color: var(--red); }
 
 /* compact mode row (13px), thumb offsets keep the 4px container padding */
 .home-stack .seg { padding: 7px 14px; font-size: 13px; }
+/* last child: auto margin below gives the flexible space under the stack */
+.home-stack .segmented { margin-bottom: auto; }
 
-/* egress IP card (tap to copy) */
-.ip-card {
-  width: min(420px, 100%);
-  padding: 14px 18px;
+/* egress IP: two centered lines (tap to copy) */
+.ip-block {
+  text-align: center;
   cursor: pointer;
-  transition: border-color .15s ease, transform .15s ease;
+  border-radius: 10px;
+  padding: 6px 10px;
+  transition: background-color .15s ease;
 }
-.ip-card:hover { border-color: var(--border-2); transform: translateY(-1px); }
+.ip-block:hover { background: rgba(255, 255, 255, .05); }
 .ip-label {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 1.2px;
   text-transform: uppercase;
-  color: var(--muted);
+  color: rgba(255, 255, 255, .65);
 }
 .ip-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-top: 6px;
-  min-height: 30px;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+  min-height: 24px;
+  color: #fff;
 }
 .ip-flag {
   display: inline-flex;
@@ -240,7 +354,7 @@ main { padding: 22px; max-width: 1280px; width: 100%; margin: 0 auto; flex: 1; }
   border-radius: 3px;
 }
 .ip-flag img { display: block; border-radius: 3px; }
-.ip-value { font-size: 18px; font-weight: 700; }
+.ip-value { font-size: 17px; font-weight: 700; color: #fff; }
 
 /* segmented control */
 .segmented {
@@ -307,7 +421,7 @@ main { padding: 22px; max-width: 1280px; width: 100%; margin: 0 auto; flex: 1; }
 }
 .btn-ghost:hover { color: var(--text); border-color: var(--accent); }
 .btn-ghost.small { padding: 3px 9px; font-size: 11px; }
-.btn-row { display: flex; gap: 8px; margin-top: 12px; }
+.btn-row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 
 /* ---- stats ---- */
 .stat-row {
@@ -361,6 +475,8 @@ main { padding: 22px; max-width: 1280px; width: 100%; margin: 0 auto; flex: 1; }
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
   margin-bottom: 16px;
 }
 .list-head h2 { margin: 0; font-size: 20px; }
@@ -384,7 +500,7 @@ main { padding: 22px; max-width: 1280px; width: 100%; margin: 0 auto; flex: 1; }
 }
 .tag.warn { background: rgba(255, 180, 84, .12); border-color: rgba(255, 180, 84, .45); color: var(--amber); }
 .tag.ok { background: rgba(47, 208, 140, .12); border-color: rgba(47, 208, 140, .45); color: var(--green); }
-.p-actions { display: flex; gap: 8px; margin-top: 10px; }
+.p-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .empty {
   text-align: center;
   color: var(--muted);
@@ -496,7 +612,8 @@ main { padding: 22px; max-width: 1280px; width: 100%; margin: 0 auto; flex: 1; }
 /* ---- toast ---- */
 .toast {
   position: fixed;
-  bottom: 24px;
+  /* above the 66px bottom tab bar */
+  bottom: 84px;
   left: 50%;
   transform: translateX(-50%);
   background: var(--card-2);
@@ -511,7 +628,13 @@ main { padding: 22px; max-width: 1280px; width: 100%; margin: 0 auto; flex: 1; }
 }
 .toast.error { border-color: rgba(255, 107, 107, .6); color: var(--red); }
 
-@media (max-width: 980px) {
-  .home-stack { padding-top: 12px; }
-  .connect-orb { width: 168px; height: 168px; }
+/* ---- narrow (the 400px window, down to the 360px minimum) ---- */
+@media (max-width: 480px) {
+  .topbar { gap: 12px; padding: 12px 16px; }
+  .brand-sub { display: none; }
+  .card { padding: 16px; }
+  /* one column everywhere: two 300px tracks plus the gap exceed the
+     ~328px content width of the minimum window */
+  .field-pair { grid-template-columns: 1fr; }
+  .log { height: 260px; }
 }

@@ -99,6 +99,9 @@ function route() {
   $("view-log").classList.toggle("hidden", !isLog);
   $("view-editor").classList.toggle("hidden", !isEditor);
 
+  // Home drops the top bar entirely: the hero wordmark is the branding there.
+  $("topbar").classList.toggle("hidden", isHome);
+
   $("nav-home").classList.toggle("active", isHome);
   $("nav-profiles").classList.toggle("active", isProfiles || isEditor);
   $("nav-stats").classList.toggle("active", isStats);
@@ -184,9 +187,10 @@ function renderStatus() {
   const prof = state.profiles.find(p => p.id === s.profile_id);
   if (prof) state.selectedProfile = prof.id;
 
-  // The circular Home control carries no label text (icon only): state is
-  // driven by data-state (CSS colours/pulses) + aria-label/title.
-  function orb(label, busy) {
+  // The Home pill toggle carries no label text: state is data-state driven
+  // (CSS knob position / track colour / border breathe) plus aria-label and
+  // title. The status word below stays pure white — the toggle owns colour.
+  function setToggle(label, busy) {
     btn.dataset.state = st;
     btn.setAttribute("aria-label", label);
     btn.title = label;
@@ -197,40 +201,36 @@ function renderStatus() {
   switch (st) {
     case "connected":
       big.textContent = "Connected";
-      big.style.color = "var(--green)";
       sub.textContent = `${s.mode === "tunnel" ? "whole-device tunnel" : "local proxy"} · ${s.profile_name || ""}`;
-      orb("Disconnect", false);
+      setToggle("Disconnect", false);
       break;
     case "connecting":
       big.textContent = "Connecting…";
-      big.style.color = "var(--amber)";
       sub.textContent = `${s.profile_name || ""} · ${s.mode || ""} mode`;
-      orb("Stop", true);
+      setToggle("Stop", true);
       break;
     case "reconnecting":
       big.textContent = "Reconnecting…";
-      big.style.color = "var(--amber)";
       sub.textContent = `attempt ${s.reconnect_attempts || 0} · ${s.last_error || ""}`;
-      orb("Stop", true);
+      setToggle("Stop", true);
       break;
     case "auth_error":
       big.textContent = "Auth rejected";
-      big.style.color = "var(--red)";
       sub.textContent = s.last_error || "credentials rejected by server";
-      orb("Connect", false);
+      setToggle("Connect", false);
       break;
     case "error":
       big.textContent = "Error";
-      big.style.color = "var(--red)";
       sub.textContent = s.last_error || "connection failed";
-      orb("Connect", false);
+      setToggle("Connect", false);
       break;
     default:
-      big.textContent = "Idle";
-      big.style.color = "var(--text)";
+      big.textContent = "Disconnected";
       sub.textContent = state.profiles.length ? "ready" : "create a profile first";
-      orb("Connect", false);
+      setToggle("Connect", false);
   }
+  // A concrete failure reason is worth red; the sub line is muted otherwise.
+  sub.classList.toggle("err", (st === "error" || st === "auth_error") && !!s.last_error);
 
   $("s-up").textContent = s.up ? fmtBytes(s.up) : "—";
   $("s-down").textContent = s.down ? fmtBytes(s.down) : "—";

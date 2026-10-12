@@ -11,10 +11,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 // Palette lifted from the Windows client (windows/frontend/dist/app.css
-// `:root`): near-black ink, blue → violet accent gradient, mint for the
-// connected state. Deliberately dark-only — a VPN console reads better
-// without a white flash when the tunnel drops at night.
-val Ink = Color(0xFF0B0F17) // --bg
+// `:root`): pure-black canvas, blue → violet accent gradient, mint for the
+// connected state, orange for the Home hero family. Deliberately dark-only —
+// a VPN console reads better without a white flash when the tunnel drops at
+// night, and true black keeps the shell seamless with the status bar.
+val Ink = Color(0xFF000000) // --bg
 val Surface1 = Color(0xFF131A26) // --card
 val Surface2 = Color(0xFF172031) // --card-2
 val Surface3 = Color(0xFF1C2537) // --card-3
@@ -27,6 +28,8 @@ val AccentViolet = Color(0xFF7C5CFF) // --accent-2
 val Mint = Color(0xFF2FD08C) // --green
 val Amber = Color(0xFFFFB454) // --amber
 val Rose = Color(0xFFFF6B6B) // --red
+/** Home screen brand hue — profile badge, wordmark family; matches the Windows shell. */
+val Orange = Color(0xFFFF7A18)
 
 /** Gradient behind `.log` / inset wells — Windows `#0a0e15`. */
 val WellBackground = Color(0xFF0A0E15)
@@ -47,6 +50,8 @@ private val SwiftSSTPColours = darkColorScheme(
     onTertiary = Color(0xFF2B1A00),
     tertiaryContainer = Color(0xFF463100),
     onTertiaryContainer = Color(0xFFFFDEB5),
+    // [Ink] is pure black: the redesigned Home reads on true black, and
+    // OLED-black also stops the app glowing next to the status bar.
     background = Ink,
     onBackground = TextPrimary,
     surface = Surface1,

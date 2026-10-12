@@ -94,12 +94,22 @@ enum class ButtonVariant { PRIMARY, DISCONNECT }
  * Slim shared top bar — brand mark, "SwiftSSTP"
  * wordmark with the "SSTP client" caption, and the status `.pill` on the
  * right. Navigation moved to the bottom bar, so this is one row only.
+ *
+ * [showBrand] = false (Home) draws nothing visible but keeps the slot and
+ * its status-bar inset: Scaffold derives the content inset from the topBar's
+ * height, so an inset-only zero-height box preserves today's layout while
+ * letting the hero wordmark own the top of the screen.
  */
 @Composable
 fun SwiftSSTPTopBar(
     state: VpnController.State,
     modifier: Modifier = Modifier,
+    showBrand: Boolean = true,
 ) {
+    if (!showBrand) {
+        Box(modifier.fillMaxWidth().statusBarsPadding())
+        return
+    }
     Column(modifier.fillMaxWidth().background(FieldBackground)) {
         // Edge-to-edge: Scaffold does not pad custom topBar composables, so
         // the brand row must apply the status-bar inset itself the way
@@ -203,11 +213,12 @@ fun AppScaffold(
     state: VpnController.State,
     current: NavTab,
     onTab: (NavTab) -> Unit,
+    showBrand: Boolean = true,
     content: @Composable (PaddingValues) -> Unit,
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = { SwiftSSTPTopBar(state) },
+        topBar = { SwiftSSTPTopBar(state, showBrand = showBrand) },
         bottomBar = { SwiftSSTPBottomBar(current, onTab) },
         content = content,
     )

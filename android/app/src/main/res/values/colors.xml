@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Launch-window chrome: matches the Windows palette (bg / accent). -->
-    <color name="ink_background">#0B0F17</color>
+    <!-- Launch-window chrome: pure black window, blue accent. -->
+    <color name="ink_background">#000000</color>
     <color name="accent">#4F8CFF</color>
     <!-- The launcher glyph sits on a pure black square. -->
     <color name="launcher_background">#000000</color>

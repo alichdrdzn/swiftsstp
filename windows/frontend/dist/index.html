@@ -8,64 +8,59 @@
 </head>
 <body>
   <div id="app">
-    <header class="topbar">
+    <!-- Hidden on Home (route toggles .hidden): there the hero wordmark is
+         the branding. Brand + status pill show on every other view. -->
+    <header class="topbar" id="topbar">
       <div class="brand">
         <span class="brand-mark"><img src="brand.svg" alt=""></span>
         <span class="brand-name">SwiftSSTP</span>
         <span class="brand-sub">SSTP client</span>
       </div>
-      <nav class="nav">
-        <a href="#/" id="nav-home" class="nav-link">Home</a>
-        <a href="#/profiles" id="nav-profiles" class="nav-link">Profiles</a>
-        <a href="#/stats" id="nav-stats" class="nav-link">Stats</a>
-        <a href="#/log" id="nav-log" class="nav-link">Log</a>
-      </nav>
       <div class="topbar-right">
         <span class="pill" id="status-pill" data-state="disconnected">disconnected</span>
       </div>
     </header>
 
     <main>
-      <!-- ================= HOME (selector + connect orb + mode + IP) ============ -->
+      <!-- ================= HOME (hero → badge → toggle → status → IP → mode) ==== -->
       <section id="view-home" class="view">
         <div class="home-stack">
-          <!-- 1. profile selector -->
+          <!-- 1. hero wordmark — the branding on Home (top bar is hidden) -->
+          <div class="hero-brand" aria-hidden="true">SwiftSSTP</div>
+
+          <!-- 2. profile badge (label kept for screen readers only) -->
           <div class="home-profile">
-            <label class="field-label" for="conn-profile">Profile</label>
+            <label class="visually-hidden" for="conn-profile">Profile</label>
             <select id="conn-profile" class="input select profile-pill"></select>
           </div>
 
-          <!-- 2. big circular connect control — the ONLY connect button -->
-          <button id="btn-connect" class="connect-orb" type="button" data-state="disconnected"
-                  aria-label="Connect" title="Connect">
-            <svg class="orb-icon" viewBox="0 0 24 24" width="64" height="64" fill="none"
-                 stroke="currentColor" stroke-width="2.1" stroke-linecap="round" aria-hidden="true">
-              <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
-              <path d="M12 2v10"></path>
-            </svg>
-          </button>
+          <!-- 3. pill toggle — the ONLY connect/disconnect control. State is
+               data-state driven (renderStatus writes it): knob left/right and
+               track colour carry connected / busy / error. -->
+          <button id="btn-connect" class="connect-toggle" type="button" data-state="disconnected"
+                  aria-label="Connect" title="Connect"></button>
 
-          <!-- 3. state text under the circle -->
+          <!-- 4. status word under the toggle (colour lives on the toggle) -->
           <div class="home-state">
-            <div class="state-big" id="state-big">Idle</div>
+            <div class="state-big" id="state-big">Disconnected</div>
             <div class="state-sub" id="state-sub">pick a profile and press connect</div>
           </div>
 
-          <!-- 4. compact mode row -->
-          <div class="segmented" id="mode-toggle" role="tablist" aria-label="Tunnel mode">
-            <button class="seg" data-mode="proxy" type="button">Local proxy</button>
-            <button class="seg" data-mode="tunnel" type="button">Whole-device</button>
-            <span class="seg-thumb" aria-hidden="true"></span>
-          </div>
-
-          <!-- 5. egress IP card (tap to copy) -->
-          <div class="card ip-card" id="ip-card" role="button" tabindex="0"
+          <!-- 5. egress IP, two centered lines (tap to copy) -->
+          <div class="ip-block" id="ip-card" role="button" tabindex="0"
                title="Copy IP address" aria-label="Copy IP address">
             <div class="ip-label" id="ip-label">IP address</div>
             <div class="ip-row">
               <span class="ip-flag hidden" id="ip-flag"></span>
               <span class="ip-value mono" id="ip-value">—</span>
             </div>
+          </div>
+
+          <!-- 6. compact mode row -->
+          <div class="segmented" id="mode-toggle" role="tablist" aria-label="Tunnel mode">
+            <button class="seg" data-mode="proxy" type="button">Local proxy</button>
+            <button class="seg" data-mode="tunnel" type="button">Whole-device</button>
+            <span class="seg-thumb" aria-hidden="true"></span>
           </div>
         </div>
       </section>
@@ -305,6 +300,46 @@
         </div>
       </section>
     </main>
+
+    <!-- Fixed bottom tab bar (mirrors the Android shell). Same nav-* ids as
+         the old topbar links so route()'s .active toggling is unchanged. -->
+    <nav class="bottomnav">
+      <a href="#/" id="nav-home" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 10.5 12 3l9 7.5"></path>
+          <path d="M5.5 9.5V21h13V9.5"></path>
+        </svg>
+        <span>Home</span>
+      </a>
+      <a href="#/profiles" id="nav-profiles" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="8" r="3.5"></circle>
+          <path d="M5 20a7 7 0 0 1 14 0"></path>
+        </svg>
+        <span>Profiles</span>
+      </a>
+      <a href="#/stats" id="nav-stats" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 20V11"></path>
+          <path d="M10 20V4"></path>
+          <path d="M16 20v-6"></path>
+          <path d="M21 20H3"></path>
+        </svg>
+        <span>Stats</span>
+      </a>
+      <a href="#/log" id="nav-log" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="16" rx="2.5"></rect>
+          <path d="m7.5 9.5 3 2.5-3 2.5"></path>
+          <path d="M13 15h3.5"></path>
+        </svg>
+        <span>Log</span>
+      </a>
+    </nav>
 
     <div id="toast" class="toast hidden"></div>
   </div>

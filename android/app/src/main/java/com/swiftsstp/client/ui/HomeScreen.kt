@@ -4,9 +4,12 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -20,6 +23,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -48,8 +52,9 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -60,12 +65,20 @@ import com.swiftsstp.client.model.Profile
 import com.swiftsstp.client.net.IpGeo
 import kotlinx.coroutines.delay
 
+/** Toggle track at rest — dark charcoal, matching the Windows shell's neutral. */
+private val ToggleTrackOff = Color(0xFF26262C)
+private val ToggleTrackConnected = Color(0xFF10623F)
+private val ToggleTrackConnecting = Color(0xFF6B4409)
+private val ToggleTrackError = Color(0xFF6B1F1F)
+
 /**
- * Home tab — the connect screen: a profile pill, the one big circular
- * connect button, the state line under it, and the egress-IP card. No stat
+ * Home tab — the connect screen: the hero wordmark, an orange profile badge,
+ * one big pill toggle, the state word, and the egress-IP lines. No stat
  * cards live here; they moved to the Stats tab.
  *
- * The circle is the only control in the app that starts or stops a tunnel.
+ * The toggle is the only control in the app that starts or stops a tunnel,
+ * and it carries the state colour (green / amber / rose), which frees the
+ * status word below to stay plain white on black.
  */
 @Composable
 fun HomeScreen(
@@ -97,7 +110,7 @@ fun HomeScreen(
         IpGeo.refresh()
     }
 
-    AppScaffold(state = vpn.state, current = NavTab.HOME, onTab = onTab) { padding ->
+    AppScaffold(state = vpn.state, current = NavTab.HOME, onTab = onTab, showBrand = false) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -105,26 +118,17 @@ fun HomeScreen(
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            // 1.5f above / 1f below centres the wordmark near the upper third.
+            Spacer(Modifier.weight(1.5f))
+
+            BrandWordmark()
+
             Spacer(Modifier.weight(1f))
 
-            ProfileSelectorPill(selected = selected, profiles = profiles, onSelect = onSelect)
-
-            Spacer(Modifier.height(30.dp))
-
-            ConnectCircleButton(
-                state = vpn.state,
-                enabled = selected != null,
-                onClick = {
-                    if (vpn.active) onDisconnect() else selected?.let(onConnect)
-                },
-            )
-
-            Spacer(Modifier.height(22.dp))
-
-            StateText(state = vpn.state, vpn = vpn, profileName = profileName)
+            ProfileBadge(selected = selected, profiles = profiles, onSelect = onSelect)
 
             if (profiles.isEmpty()) {
-                Spacer(Modifier.height(18.dp))
+                Spacer(Modifier.height(16.dp))
                 Text(
                     text = "Create a server profile first — credentials stay on this device.",
                     style = MaterialTheme.typography.bodySmall,
@@ -136,9 +140,23 @@ fun HomeScreen(
                 GhostButton(text = "New profile", onClick = onNewProfile)
             }
 
-            Spacer(Modifier.height(26.dp))
+            Spacer(Modifier.height(30.dp))
 
-            IpAddressCard(result = geo)
+            ConnectToggle(
+                state = vpn.state,
+                enabled = selected != null,
+                onClick = {
+                    if (vpn.active) onDisconnect() else selected?.let(onConnect)
+                },
+            )
+
+            Spacer(Modifier.height(20.dp))
+
+            StateText(state = vpn.state, vpn = vpn, profileName = profileName)
+
+            Spacer(Modifier.height(30.dp))
+
+            IpAddressBlock(result = geo)
 
             Spacer(Modifier.weight(1f))
         }
@@ -146,11 +164,12 @@ fun HomeScreen(
 }
 
 /**
- * Profile selector pill — the slim "which server?" control at the top of the
- * home screen; tapping it opens the profile list.
+ * Profile badge — an orange-outlined pill naming the selected server; tapping
+ * opens the profile list. It is the second-brightest thing on screen after
+ * the wordmark, so the "which server?" question answers at a glance.
  */
 @Composable
-private fun ProfileSelectorPill(
+private fun ProfileBadge(
     selected: Profile?,
     profiles: List<Profile>,
     onSelect: (Profile) -> Unit,
@@ -162,8 +181,8 @@ private fun ProfileSelectorPill(
             modifier = Modifier
                 .height(40.dp)
                 .clip(shape)
-                .background(FieldBackground)
-                .border(1.dp, Hairline2, shape)
+                .background(Orange.copy(alpha = 0.14f))
+                .border(1.dp, Orange.copy(alpha = 0.55f), shape)
                 .clickable { menuOpen = true }
                 .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -171,13 +190,17 @@ private fun ProfileSelectorPill(
             Text(
                 text = selected?.let { p -> p.name.ifBlank { p.host } } ?: "No profiles",
                 style = MaterialTheme.typography.labelLarge,
-                color = if (selected == null) TextMuted else TextPrimary,
+                color = if (selected == null) TextMuted else Color(0xFFFFA04A),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
             Spacer(Modifier.width(6.dp))
-            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = TextMuted)
+            Icon(
+                Icons.Default.ArrowDropDown,
+                contentDescription = null,
+                tint = if (selected == null) TextMuted else Color(0xFFFFA04A),
+            )
         }
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
             profiles.forEach { p ->
@@ -194,55 +217,51 @@ private fun ProfileSelectorPill(
 }
 
 /**
- * The big circular connect button — a power disc with a
- * hairline ring at rest, mint and glowing while connected, amber and breathing
- * while the tunnel is coming up, rose on error.
+ * The connect/disconnect toggle — a wide pill whose white knob slides right
+ * while the tunnel is coming up or up, and takes the state colour on the
+ * track (green connected, amber connecting, rose error with the knob still
+ * left). A spring with a little overshoot sells the slide; while connecting
+ * only the border breathes, so a busy tunnel never competes with the
+ * wordmark for attention.
  */
 @Composable
-private fun ConnectCircleButton(
+private fun ConnectToggle(
     state: VpnController.State,
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
+    val active = state == VpnController.State.CONNECTING ||
+        state == VpnController.State.CONNECTED ||
+        state == VpnController.State.RECONNECTING
     val busy = state == VpnController.State.CONNECTING || state == VpnController.State.RECONNECTING
-    val accent = when (state) {
-        VpnController.State.CONNECTED -> Mint
-        VpnController.State.CONNECTING, VpnController.State.RECONNECTING -> Amber
-        VpnController.State.ERROR -> Rose
-        else -> Hairline2
+
+    val trackColor = when (state) {
+        VpnController.State.CONNECTED -> ToggleTrackConnected
+        VpnController.State.CONNECTING, VpnController.State.RECONNECTING -> ToggleTrackConnecting
+        VpnController.State.ERROR -> ToggleTrackError
+        else -> ToggleTrackOff
     }
-    val iconColor = when (state) {
-        VpnController.State.CONNECTED -> Mint
-        VpnController.State.CONNECTING, VpnController.State.RECONNECTING -> Amber
-        VpnController.State.ERROR -> Rose
-        else -> TextPrimary
-    }
-    val glow = when (state) {
-        VpnController.State.CONNECTED -> Mint
-        VpnController.State.CONNECTING, VpnController.State.RECONNECTING -> Amber
-        VpnController.State.ERROR -> Rose
-        else -> Color.Black
-    }
-    val elevation = when (state) {
-        VpnController.State.CONNECTED -> 28.dp
-        VpnController.State.CONNECTING, VpnController.State.RECONNECTING -> 18.dp
-        VpnController.State.ERROR -> 12.dp
-        else -> 0.dp
+    val borderColor = when (state) {
+        VpnController.State.CONNECTED -> Mint.copy(alpha = 0.60f)
+        VpnController.State.CONNECTING, VpnController.State.RECONNECTING -> Amber.copy(alpha = 0.60f)
+        VpnController.State.ERROR -> Rose.copy(alpha = 0.60f)
+        else -> Color.White.copy(alpha = 0.08f)
     }
 
-    // Busy states breathe — the ring's scale and alpha cycle continuously.
-    val transition = rememberInfiniteTransition(label = "connect-circle")
-    val pulseAlpha by transition.animateFloat(
-        initialValue = 1f,
-        targetValue = 0.6f,
-        animationSpec = infiniteRepeatable(tween(650), RepeatMode.Reverse),
-        label = "connect-circle-alpha",
+    // 248 − 76 knob − 8dp inset each end = 156dp of travel.
+    val knobOffset by animateDpAsState(
+        targetValue = if (active) 156.dp else 0.dp,
+        animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMedium),
+        label = "connect-toggle-knob",
     )
-    val pulseScale by transition.animateFloat(
+
+    // Busy states breathe — but only the border; the knob and track hold still.
+    val transition = rememberInfiniteTransition(label = "connect-toggle")
+    val breathe by transition.animateFloat(
         initialValue = 1f,
-        targetValue = 1.035f,
+        targetValue = 0.55f,
         animationSpec = infiniteRepeatable(tween(650), RepeatMode.Reverse),
-        label = "connect-circle-scale",
+        label = "connect-toggle-border-alpha",
     )
 
     val interactionSource = remember { MutableInteractionSource() }
@@ -250,47 +269,54 @@ private fun ConnectCircleButton(
 
     Box(
         modifier = Modifier
-            .size(190.dp)
+            .width(248.dp)
+            .height(92.dp)
             .graphicsLayer {
-                scaleX = pulseScale * (if (pressed) 0.98f else 1f)
-                scaleY = pulseScale * (if (pressed) 0.98f else 1f)
-                alpha = (if (busy) pulseAlpha else 1f) * (if (pressed) 0.85f else 1f)
+                scaleX = if (pressed) 0.98f else 1f
+                scaleY = if (pressed) 0.98f else 1f
             }
-            .shadow(elevation, CircleShape, ambientColor = glow, spotColor = glow)
-            .clip(CircleShape)
-            .background(Surface1)
-            .border(2.dp, accent, CircleShape)
+            .shadow(10.dp, RoundedCornerShape(999.dp))
+            .clip(RoundedCornerShape(999.dp))
+            .background(trackColor)
+            .border(
+                1.dp,
+                borderColor.copy(alpha = borderColor.alpha * (if (busy) breathe else 1f)),
+                RoundedCornerShape(999.dp),
+            )
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 enabled = enabled,
                 onClick = onClick,
             )
+            .semantics { contentDescription = if (active) "Disconnect" else "Connect" }
             .alpha(if (enabled) 1f else 0.45f),
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.CenterStart,
     ) {
-        Icon(
-            imageVector = AppIcons.Power,
-            contentDescription = if (state == VpnController.State.CONNECTED) {
-                "Disconnect"
-            } else {
-                "Connect"
-            },
-            tint = iconColor,
-            modifier = Modifier.size(64.dp),
+        Box(
+            modifier = Modifier
+                .padding(start = 8.dp)
+                .offset(x = knobOffset)
+                .size(76.dp)
+                .shadow(8.dp, CircleShape)
+                .background(Color.White, CircleShape),
         )
     }
 }
 
-/** The state word and its muted sub-line under the connect button. */
+/**
+ * Status word and its muted sub-line. Deliberately colourless: the toggle
+ * above carries the state colour, so the word itself stays pure white and
+ * high-contrast on black.
+ */
 @Composable
 private fun StateText(state: VpnController.State, vpn: VpnController.Snapshot, profileName: String) {
-    val (stateBig, stateColor) = when (state) {
-        VpnController.State.CONNECTED -> "Connected" to Mint
-        VpnController.State.CONNECTING -> "Connecting…" to Amber
-        VpnController.State.RECONNECTING -> "Reconnecting…" to Amber
-        VpnController.State.ERROR -> (if (vpn.authError) "Auth rejected" else "Error") to Rose
-        VpnController.State.DISCONNECTED -> "Not connected" to TextPrimary
+    val stateBig = when (state) {
+        VpnController.State.CONNECTED -> "Connected"
+        VpnController.State.CONNECTING -> "Connecting…"
+        VpnController.State.RECONNECTING -> "Reconnecting…"
+        VpnController.State.ERROR -> if (vpn.authError) "Auth rejected" else "Error"
+        VpnController.State.DISCONNECTED -> "Disconnected"
     }
     val stateSub = when (state) {
         VpnController.State.CONNECTED -> "whole-device tunnel · $profileName"
@@ -303,8 +329,8 @@ private fun StateText(state: VpnController.State, vpn: VpnController.Snapshot, p
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = stateBig,
-            style = TextStyle(fontSize = 24.sp, fontWeight = FontWeight.Bold),
-            color = stateColor,
+            style = TextStyle(fontSize = 26.sp, fontWeight = FontWeight.Bold),
+            color = Color.White,
         )
         Text(
             text = stateSub,
@@ -328,13 +354,14 @@ private fun StateText(state: VpnController.State, vpn: VpnController.Snapshot, p
 }
 
 /**
- * Egress IP card — a slim rounded card with the
- * address in monospace behind its country's flag. Tapping copies the address.
+ * Egress IP — two centred lines (micro-label, then the address with its
+ * country flag). No card chrome: on pure black a hairline box only adds
+ * noise. Tap copies; "Copied" fades in under the label in a reserved line so
+ * nothing jumps.
  */
 @Composable
-private fun IpAddressCard(result: IpGeo.Result?) {
+private fun IpAddressBlock(result: IpGeo.Result?) {
     val context = LocalContext.current
-    val shape = RoundedCornerShape(14.dp)
     var copied by remember { mutableStateOf(false) }
     LaunchedEffect(copied) {
         if (copied) {
@@ -344,50 +371,41 @@ private fun IpAddressCard(result: IpGeo.Result?) {
     }
 
     val flag = IpGeo.flagEmoji(result?.country.orEmpty())
-    Box(
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .fillMaxWidth()
-            .clip(shape)
-            .background(Surface1)
-            .border(1.dp, Hairline, shape)
             .clickable(enabled = result != null) {
                 copyToClipboard(context, "SwiftSSTP IP", result!!.ip)
                 copied = true
-            }
-            .padding(horizontal = 18.dp, vertical = 14.dp),
+            },
     ) {
-        Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "IP ADDRESS",
-                    style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 1.sp),
-                    color = TextMuted,
-                )
-                Spacer(Modifier.weight(1f))
-                Text(
-                    text = "Copied",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Mint,
-                    modifier = Modifier.alpha(if (copied) 1f else 0f),
-                )
+        Text(
+            text = "YOUR IP ADDRESS",
+            style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp, letterSpacing = 1.2.sp),
+            color = Color.White.copy(alpha = 0.65f),
+        )
+        Text(
+            text = "Copied",
+            style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp),
+            color = Mint,
+            modifier = Modifier.alpha(if (copied) 1f else 0f),
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (flag.isNotBlank()) {
+                Text(text = flag, fontSize = 17.sp)
+                Spacer(Modifier.width(6.dp))
             }
-            Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (flag.isNotBlank()) {
-                    Text(text = flag, fontSize = 20.sp)
-                    Spacer(Modifier.width(10.dp))
-                }
-                Text(
-                    text = result?.ip ?: "—",
-                    style = MaterialTheme.typography.labelLarge.copy(
-                        fontSize = 18.sp,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 0.sp,
-                    ),
-                    color = if (result == null) TextMuted else TextPrimary,
-                )
-            }
+            Text(
+                text = result?.ip ?: "—",
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.sp,
+                ),
+                color = if (result == null) TextMuted else Color.White,
+            )
         }
     }
 }

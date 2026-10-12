@@ -24,13 +24,15 @@ var assets embed.FS
 func main() {
 	app := NewApp()
 
+	// Phone-shaped window: the frontend is a single 400px-wide column
+	// (bottom tab bar + one stacked Home screen), matching the Android shell.
 	err := wails.Run(&options.App{
 		Title:             "SwiftSSTP",
-		Width:             1120,
-		Height:            780,
-		MinWidth:          920,
+		Width:             400,
+		Height:            860,
+		MinWidth:          360,
 		MinHeight:         640,
-		BackgroundColour:  &options.RGBA{R: 11, G: 15, B: 23, A: 255},
+		BackgroundColour:  &options.RGBA{R: 0, G: 0, B: 0, A: 255},
 		AssetServer:       &assetserver.Options{Assets: assets},
 		OnStartup:         app.startup,
 		OnShutdown:        app.shutdown,
