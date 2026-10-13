@@ -154,13 +154,18 @@ func (p Profile) TunnelCount() int {
 	return p.Tunnels
 }
 
+// The three local-proxy accessors below read extras, which
+// Settings.Apply fills from settings.json at connect time: the knobs
+// are app-wide now, but the manager and the data plane keep reading
+// them off the profile.
+
 // SOCKSPort is the profile's SOCKS5 inbound port (extras.socks_port).
 func (p Profile) SOCKSPort() int { return p.extraInt("socks_port", 10808) }
 
 // HTTPPort is the profile's HTTP inbound port (extras.http_port).
 func (p Profile) HTTPPort() int { return p.extraInt("http_port", 10809) }
 
-// SystemProxy reports whether the profile wants the OS proxy set while
+// SystemProxy reports whether the OS proxy should be set while
 // connected in proxy mode (extras.system_proxy).
 func (p Profile) SystemProxy() bool { return p.extraBool("system_proxy") }
 
@@ -169,6 +174,10 @@ func (p Profile) extraInt(key string, def int) int {
 		return def
 	}
 	switch v := p.Extras[key].(type) {
+	case int: // written in memory by Settings.Apply; JSON decoding yields float64
+		if v > 0 {
+			return v
+		}
 	case float64:
 		if v > 0 {
 			return int(v)

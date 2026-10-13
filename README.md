@@ -25,9 +25,11 @@ tunnel options are configured once for the whole app.
   regardless of the TLS verification mode.
 - **App-wide settings** (one set of values shared by every profile, in
   `settings.json`): MTU, DNS override, IPv4/IPv6, auto-reconnect with
-  exponential backoff, upstream proxy (HTTP CONNECT or SOCKS5, with
-  optional credentials), and 1–8 parallel sessions with independent
-  failover. Both shells expose them on their Settings tab.
+  exponential backoff, upstream proxy (HTTP CONNECT or SOCKS5 with
+  optional credentials), 1–8 parallel sessions with independent
+  failover, and, on Windows, the local proxy endpoints (SOCKS5 and HTTP)
+  and the "set Windows system proxy while connected" toggle. Both shells
+  expose them on their Settings tab.
 - **Per-application tunneling** (Android, also app-wide): restrict the VPN
   to a listed set of applications or exclude a listed set.
 - **Traffic accounting**: live session transfer rates and persistent
@@ -37,6 +39,10 @@ tunnel options are configured once for the whole app.
 - **Interface**: dark theme with a tabbed layout on both platforms:
   connection control and the current public address on the home tab,
   with profiles, statistics, logs and settings each in their own tab.
+- **System tray** (Windows): the title-bar close hides the window while
+  the tunnel keeps running; a left click on the tray icon, or a choice
+  from its menu, restores the window, and the menu's Exit item closes
+  the application.
 
 ## Download
 

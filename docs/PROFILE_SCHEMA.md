@@ -31,8 +31,10 @@ app-specific extras under "extras" but must not rename core fields.
 - `ca_path`: file path of a PEM bundle; only meaningful for custom_ca.
   The certificate mode is the one connection option that stays per profile.
 - `extras` (app-specific, both shells may use it):
-  - Windows: `socks_port`, `http_port`, `system_proxy` (local proxy
-    endpoints used in proxy mode)
+  - Windows: none for now. A legacy `profiles.json` that still carries
+    `socks_port` / `http_port` / `system_proxy` there is read once, on
+    the first load after the upgrade, to seed `settings.json` (below);
+    those keys are never written back.
   - Android: none for now
 - A profile carries only what makes a connection to THAT server: address,
   credentials and certificate handling. Everything else is app-wide and
@@ -65,6 +67,9 @@ app-specific extras under "extras" but must not rename core fields.
     "password": ""
   },
   "tunnels": 1,
+  "socks_port": 10808,
+  "http_port": 10809,
+  "system_proxy": false,
   "app_rules": {
     "mode": "allow",
     "packages": []
@@ -88,6 +93,15 @@ app-specific extras under "extras" but must not rename core fields.
 - `tunnels`: number of parallel SSTP sessions to bundle (1..8). 1 = single
   session. Higher values spread concurrent flows across sessions for
   aggregate throughput and per-session failover.
+- `socks_port` / `http_port` / `system_proxy` (Windows only): the local
+  proxy endpoints and the system-proxy toggle for proxy mode.
+  `socks_port` and `http_port` are the ports of the SOCKS5 and HTTP
+  inbounds the app starts on 127.0.0.1 while a proxy session is up
+  (defaults 10808 and 10809); 0 means "absent" and is resolved to the
+  default when applied. `system_proxy` additionally points the Windows
+  system proxy at those inbounds for the lifetime of the session
+  (default false). Android does not write or need these keys and must
+  tolerate their absence, the same way Windows tolerates `app_rules`.
 - `app_rules` (Android only): per-app tunneling. `mode`: "allow" (only the
   listed packages use the tunnel) | "deny" (everything except them);
   `packages`: package names, empty = whole device in allow mode. Windows
@@ -98,7 +112,9 @@ app-specific extras under "extras" but must not rename core fields.
   load from the first profile in `profiles.json` (file order) that differs
   from the built-in defaults in at least one moved field; if no profile
   differs, the defaults are written. Existing installs therefore keep the
-  values they had configured.
+  values they had configured. The three Windows local-proxy knobs count
+  as moved fields too: they are taken from a legacy profile's `extras`
+  when that key is actually present there.
 
 # Usage stats (separate file, same directory, `usage-stats.json`)
 

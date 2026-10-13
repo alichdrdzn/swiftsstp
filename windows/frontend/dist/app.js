@@ -677,17 +677,15 @@ function renderProfiles() {
   for (const p of state.profiles) {
     const card = document.createElement("div");
     card.className = "card profile-card";
-    const extras = p.extras || {};
-    // Only per-profile tags left: TLS, username, system proxy. Reconnect,
-    // upstream proxy and tunnel count are app-wide now (Settings owns
-    // them), so they no longer describe one profile.
+    // Only per-profile tags left: TLS and username. Reconnect, upstream
+    // proxy, tunnel count and the local proxy knobs are app-wide now
+    // (Settings owns them), so they no longer describe one profile.
     card.innerHTML = `
       <div class="p-name">${esc(p.name || "unnamed")}</div>
       <div class="p-host">${esc(p.host)}:${p.port || 443}${p.sni ? " · sni " + esc(p.sni) : ""}</div>
       <div class="p-meta">
         ${tlsTag(p)}
         <span class="tag">${esc(p.username || "—")}</span>
-        ${extras.system_proxy ? '<span class="tag">system proxy</span>' : ""}
       </div>
       <div class="p-actions">
         <button class="btn-ghost" data-act="edit">Edit</button>
@@ -758,11 +756,11 @@ async function openEditor(id) {
 }
 
 /* The editor only owns what makes a connection to THAT server: address,
- * credentials, certificate handling and the local proxy ports. The
- * tunnel options (MTU, families, DNS, reconnect, upstream proxy,
- * tunnels) live in the Settings view and settings.json. */
+ * credentials and certificate handling. The tunnel options (MTU,
+ * families, DNS, reconnect, upstream proxy, tunnels) and the local
+ * proxy knobs (SOCKS5 / HTTP ports, system proxy) live in the Settings
+ * view and settings.json. */
 function fillForm(p) {
-  const ex = p.extras || {};
   $("f-name").value = p.name || "";
   $("f-host").value = p.host || "";
   $("f-port").value = p.port || 443;
@@ -771,9 +769,6 @@ function fillForm(p) {
   $("f-pass").value = p.password || "";
   $("f-tls").value = p.tls_mode || "verify";
   $("f-ca").value = p.ca_path || "";
-  $("f-socks").value = ex.socks_port || 10808;
-  $("f-http").value = ex.http_port || 10809;
-  $("f-sysproxy").checked = !!ex.system_proxy;
   $("ca-wrap").classList.toggle("hidden", $("f-tls").value !== "custom_ca");
 }
 
@@ -789,11 +784,10 @@ function collectForm() {
     password: $("f-pass").value,
     tls_mode: $("f-tls").value,
     ca_path: $("f-ca").value.trim(),
-    extras: {
-      socks_port: parseInt($("f-socks").value, 10) || 10808,
-      http_port: parseInt($("f-http").value, 10) || 10809,
-      system_proxy: $("f-sysproxy").checked,
-    },
+    // Always send an object: the schema keeps extras open but empty on
+    // Windows now, and this drops any legacy socks_port / http_port /
+    // system_proxy an old profiles.json still carried in the entry.
+    extras: {},
   };
 }
 
@@ -814,6 +808,11 @@ function fillSettings(s) {
   $("f-proxy-user").value = px.username || "";
   $("f-proxy-pass").value = px.password || "";
   toggleProxyFields();
+  // Local proxy inbounds started in proxy mode (app-wide since the
+  // knobs left the profile editor).
+  $("f-socks").value = s.socks_port || 10808;
+  $("f-http").value = s.http_port || 10809;
+  $("f-sysproxy").checked = !!s.system_proxy;
   $("f-tunnels").value = clampTunnels(s.tunnels);
 }
 
@@ -836,6 +835,11 @@ function collectSettings() {
       username: $("f-proxy-user").value,
       password: $("f-proxy-pass").value,
     },
+    // A blank or nonsense port falls back to the default, mirroring the
+    // other integer fields in this form.
+    socks_port: parseInt($("f-socks").value, 10) || 10808,
+    http_port: parseInt($("f-http").value, 10) || 10809,
+    system_proxy: $("f-sysproxy").checked,
     tunnels: clampTunnels($("f-tunnels").value),
   };
 }

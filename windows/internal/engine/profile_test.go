@@ -142,6 +142,11 @@ func TestSettingsApplySplit(t *testing.T) {
 		t.Fatalf("defaults applied: tunnels=%d proxy=%+v v4=%v v6=%v",
 			p.TunnelCount(), p.Proxy, p.IPv4Enabled, p.IPv6Enabled)
 	}
+	// The local-proxy knobs reach the manager through extras, so the
+	// defaults must land there in a shape the accessors read back.
+	if p.SOCKSPort() != 10808 || p.HTTPPort() != 10809 || p.SystemProxy() {
+		t.Fatalf("defaults applied to extras: %+v", p.Extras)
+	}
 
 	// A non-default set must reach the engine through the same path.
 	s.MTU = 1350
@@ -149,12 +154,18 @@ func TestSettingsApplySplit(t *testing.T) {
 	s.IPv6Enabled = true
 	s.DNSOverride = []string{"1.1.1.1"}
 	s.Proxy = Proxy{Type: "http", Host: "proxy.example.com", Port: 3128}
+	s.SocksPort = 20808
+	s.HTTPPort = 20809
+	s.SystemProxy = true
 	if err := s.Validate(); err != nil {
 		t.Fatalf("settings validate: %v", err)
 	}
 	s.Apply(&p)
 	if p.MTU != 1350 || p.TunnelCount() != 4 || !p.IPv6Enabled || len(p.DNSOverride) != 1 {
 		t.Fatalf("applied: %+v", p)
+	}
+	if p.SOCKSPort() != 20808 || p.HTTPPort() != 20809 || !p.SystemProxy() {
+		t.Fatalf("applied extras: %+v", p.Extras)
 	}
 	if err := p.Validate(); err != nil {
 		t.Fatalf("profile validate after apply: %v", err)
@@ -169,7 +180,29 @@ func TestSettingsApplySplit(t *testing.T) {
 
 	back := SettingsFrom(p)
 	if back.MTU != s.MTU || back.Tunnels != s.Tunnels || back.Proxy != s.Proxy ||
-		!back.IPv6Enabled || len(back.DNSOverride) != 1 {
+		!back.IPv6Enabled || len(back.DNSOverride) != 1 ||
+		back.SocksPort != s.SocksPort || back.HTTPPort != s.HTTPPort || back.SystemProxy != s.SystemProxy {
 		t.Fatalf("SettingsFrom/Apply round trip: %+v vs %+v", back, s)
+	}
+
+	// Local proxy ports: 0 means "field absent in an old settings.json"
+	// and must pass validation; an explicit out-of-range port must not.
+	s.SocksPort, s.HTTPPort, s.SystemProxy = 0, 0, false
+	if err := s.Validate(); err != nil {
+		t.Fatalf("zero local proxy ports mean absent and must validate: %v", err)
+	}
+	// Applying zero-valued (absent) settings still resolves the ports to
+	// the defaults, so the manager never sees 0 at dial time.
+	s.Apply(&p)
+	if p.SOCKSPort() != 10808 || p.HTTPPort() != 10809 || p.SystemProxy() {
+		t.Fatalf("absent ports did not resolve to defaults: %+v", p.Extras)
+	}
+	s.SocksPort = 70000
+	if err := s.Validate(); err == nil {
+		t.Fatal("settings socks port 70000 should be rejected")
+	}
+	s.SocksPort, s.HTTPPort = 10808, -1
+	if err := s.Validate(); err == nil {
+		t.Fatal("settings http port -1 should be rejected")
 	}
 }

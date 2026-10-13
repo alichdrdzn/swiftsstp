@@ -219,25 +219,9 @@
                  app-wide now (docs/PROFILE_SCHEMA.md settings.json). -->
           </div>
 
-          <!-- Auto-reconnect, Upstream proxy and Tunnels moved to the
-               Settings tab: they are app-wide now. -->
-
-          <div class="card">
-            <h3>Local proxy (proxy mode)</h3>
-            <div class="field-pair">
-              <div>
-                <label class="field-label" for="f-socks">SOCKS5 port</label>
-                <input class="input" id="f-socks" type="number" min="1" max="65535" value="10808">
-              </div>
-              <div>
-                <label class="field-label" for="f-http">HTTP port</label>
-                <input class="input" id="f-http" type="number" min="1" max="65535" value="10809">
-              </div>
-            </div>
-            <div class="switch-row">
-              <label class="switch"><input type="checkbox" id="f-sysproxy"><span></span> Set Windows system proxy while connected</label>
-            </div>
-          </div>
+          <!-- Auto-reconnect, Upstream proxy, Tunnels and the local
+               proxy knobs (SOCKS5 / HTTP ports, system proxy) moved to
+               the Settings tab: they are app-wide now. -->
         </div>
       </section>
 
@@ -333,7 +317,25 @@
             </div>
           </div>
 
-          <!-- 4. NETWORK -->
+          <!-- 4. LOCAL PROXY (the inbounds started in proxy mode) -->
+          <div class="card">
+            <h3>Local proxy</h3>
+            <div class="field-pair">
+              <div>
+                <label class="field-label" for="f-socks">SOCKS5 port</label>
+                <input class="input" id="f-socks" type="number" min="1" max="65535" value="10808">
+              </div>
+              <div>
+                <label class="field-label" for="f-http">HTTP port</label>
+                <input class="input" id="f-http" type="number" min="1" max="65535" value="10809">
+              </div>
+            </div>
+            <div class="switch-row">
+              <label class="switch"><input type="checkbox" id="f-sysproxy"><span></span> Set Windows system proxy while connected</label>
+            </div>
+          </div>
+
+          <!-- 5. NETWORK -->
           <div class="card">
             <h3>Network</h3>
             <label class="field-label" for="f-mtu">MTU (0 = engine default 1400)</label>
@@ -346,7 +348,7 @@
             <textarea class="input textarea mono" id="f-dns" rows="3" placeholder="1.1.1.1"></textarea>
           </div>
 
-          <!-- 5. AUTO-RECONNECT -->
+          <!-- 6. AUTO-RECONNECT -->
           <div class="card">
             <h3>Auto-reconnect</h3>
             <div class="switch-row">

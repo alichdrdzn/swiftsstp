@@ -118,7 +118,8 @@ func TestLoadSettingsMigratesFresh(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !s.IPv4Enabled || s.IPv6Enabled || s.Tunnels != 1 ||
-		!s.AutoReconnect.Enabled || s.AutoReconnect.InitialBackoffMS != 1000 || s.Proxy.Configured() {
+		!s.AutoReconnect.Enabled || s.AutoReconnect.InitialBackoffMS != 1000 || s.Proxy.Configured() ||
+		s.SocksPort != 10808 || s.HTTPPort != 10809 || s.SystemProxy {
 		t.Fatalf("fresh settings = %+v, want defaults", s)
 	}
 	path := filepath.Join(home, ".config", "SwiftSSTP", "settings.json")
@@ -130,7 +131,7 @@ func TestLoadSettingsMigratesFresh(t *testing.T) {
 	if err := json.Unmarshal(b, &f); err != nil {
 		t.Fatalf("settings.json: %v", err)
 	}
-	if f.Version != 1 || !f.IPv4Enabled {
+	if f.Version != 1 || !f.IPv4Enabled || f.SocksPort != 10808 || f.HTTPPort != 10809 {
 		t.Fatalf("settings.json = %s", b)
 	}
 	// Stable on the second load (no re-migration).
@@ -165,7 +166,7 @@ func TestLoadSettingsMigratesFromProfiles(t *testing.T) {
      "mtu":1300,"ipv4_enabled":true,"ipv6_enabled":true,"dns_override":["1.1.1.1"],
      "auto_reconnect":{"enabled":false,"initial_backoff_ms":2000,"max_backoff_ms":60000},
      "proxy":{"type":"socks5","host":"127.0.0.1","port":1080,"username":"","password":""},
-     "tunnels":3,"extras":{}},
+     "tunnels":3,"extras":{"socks_port":20808,"http_port":20809,"system_proxy":true}},
     {"id":"3","name":"c","host":"c","port":443,"username":"u","password":"p","tls_mode":"verify",
      "mtu":1200,"ipv4_enabled":true,"ipv6_enabled":false,"dns_override":[],
      "auto_reconnect":{"enabled":true,"initial_backoff_ms":1000,"max_backoff_ms":30000},
@@ -181,7 +182,8 @@ func TestLoadSettingsMigratesFromProfiles(t *testing.T) {
 	}
 	if s.MTU != 1300 || s.Tunnels != 3 || !s.IPv6Enabled || len(s.DNSOverride) != 1 ||
 		s.AutoReconnect.Enabled || s.AutoReconnect.InitialBackoffMS != 2000 ||
-		s.Proxy.Type != "socks5" || s.Proxy.Port != 1080 {
+		s.Proxy.Type != "socks5" || s.Proxy.Port != 1080 ||
+		s.SocksPort != 20808 || s.HTTPPort != 20809 || !s.SystemProxy {
 		t.Fatalf("migrated settings = %+v, want profile 2's values", s)
 	}
 	// The seeded file sticks: a later LoadSettings never re-migrates, even
@@ -205,8 +207,176 @@ func TestLoadSettingsMigratesFromProfiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !s.IPv4Enabled || s.IPv6Enabled || s.Tunnels != 1 || !s.AutoReconnect.Enabled {
+	if !s.IPv4Enabled || s.IPv6Enabled || s.Tunnels != 1 || !s.AutoReconnect.Enabled ||
+		s.SocksPort != 10808 || s.HTTPPort != 10809 || s.SystemProxy {
 		t.Fatalf("converged profiles seeded %+v, want defaults", s)
+	}
+}
+
+// TestLoadSettingsMigratesLegacyProxyExtras pins the extras half of the
+// migration: the three local-proxy knobs used to live in each profile's
+// extras map, so they are read from there and only when the key is
+// actually present. A profile whose only difference is legacy extras
+// still seeds settings.json; one that carries none of them leaves the
+// defaults untouched.
+func TestLoadSettingsMigratesLegacyProxyExtras(t *testing.T) {
+	home := freshHome(t)
+	dir := filepath.Join(home, ".config", "SwiftSSTP")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "profiles.json")
+	// Every top-level moved field matches the defaults: only the legacy
+	// extras knobs differ, and they must still flag the profile and get
+	// folded in.
+	legacy := `{"version":1,"profiles":[
+    {"id":"1","name":"a","host":"a","port":443,"username":"u","password":"p","tls_mode":"verify",
+     "mtu":0,"ipv4_enabled":true,"ipv6_enabled":false,"dns_override":[],
+     "auto_reconnect":{"enabled":true,"initial_backoff_ms":1000,"max_backoff_ms":30000},
+     "proxy":{"type":"","host":"","port":0,"username":"","password":""},"tunnels":1,
+     "extras":{"socks_port":20808,"http_port":20809,"system_proxy":true}}
+  ]}`
+	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.SocksPort != 20808 || s.HTTPPort != 20809 || !s.SystemProxy {
+		t.Fatalf("legacy extras not folded in: %+v", s)
+	}
+	if !s.IPv4Enabled || s.Tunnels != 1 || s.MTU != 0 || s.Proxy.Configured() {
+		t.Fatalf("legacy extras seeding leaked into other fields: %+v", s)
+	}
+
+	// A profiles.json that carries none of the three keys seeds the
+	// defaults, never zero values.
+	if err := os.Remove(filepath.Join(dir, "settings.json")); err != nil {
+		t.Fatal(err)
+	}
+	clean := `{"version":1,"profiles":[{"id":"2","name":"b","host":"b","port":443,
+    "username":"u","password":"p","tls_mode":"verify","extras":{}}]}`
+	if err := os.WriteFile(path, []byte(clean), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err = LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.SocksPort != 10808 || s.HTTPPort != 10809 || s.SystemProxy {
+		t.Fatalf("extras-free profiles.json seeded %+v, want defaults", s)
+	}
+}
+
+// TestLoadSettingsFoldsExtrasIntoExistingFile pins the second, narrower
+// migration: settings.json existed before the three local-proxy keys did,
+// so an install that already has one keeps waiting for them. Folding the
+// values in on the next load is what stops the first connect after the
+// upgrade from writing the built-in defaults over the ports and the system
+// proxy toggle the user had configured.
+func TestLoadSettingsFoldsExtrasIntoExistingFile(t *testing.T) {
+	home := freshHome(t)
+	dir := filepath.Join(home, ".config", "SwiftSSTP")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// A profiles.json the way the old install left it: the knobs live in
+	// each profile's extras.
+	legacyProfiles := `{"version":1,"profiles":[
+    {"id":"1","name":"a","host":"a","port":443,"username":"u","password":"p","tls_mode":"verify",
+     "extras":{"socks_port":20808,"http_port":20809,"system_proxy":true}}
+  ]}`
+	if err := os.WriteFile(filepath.Join(dir, "profiles.json"), []byte(legacyProfiles), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// A settings.json from the release that predated those keys: complete
+	// for everything else, and carrying values of its own that the fold-in
+	// must not disturb.
+	oldSettings := `{"version":1,"mtu":1300,"ipv4_enabled":true,"ipv6_enabled":false,
+  "dns_override":[],"auto_reconnect":{"enabled":true,"initial_backoff_ms":1000,"max_backoff_ms":30000},
+  "proxy":{"type":"","host":"","port":0,"username":"","password":""},"tunnels":2}`
+	path := filepath.Join(dir, "settings.json")
+	if err := os.WriteFile(path, []byte(oldSettings), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.SocksPort != 20808 || s.HTTPPort != 20809 || !s.SystemProxy {
+		t.Fatalf("legacy extras not folded into the existing settings.json: %+v", s)
+	}
+	if s.MTU != 1300 || s.Tunnels != 2 || !s.IPv4Enabled {
+		t.Fatalf("fold-in disturbed the rest of the file: %+v", s)
+	}
+	// The pass persists, so the keys are on disk and later loads read them
+	// from the file instead of consulting profiles.json again.
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range localProxyKeys {
+		if !strings.Contains(string(b), `"`+k+`"`) {
+			t.Fatalf("settings.json missing %q after the fold-in: %s", k, b)
+		}
+	}
+	again, err := LoadSettings()
+	if err != nil || again.SocksPort != 20808 || again.MTU != 1300 {
+		t.Fatalf("second LoadSettings = %+v, %v", again, err)
+	}
+}
+
+// TestLoadSettingsKeepsExplicitKnobs pins the other half of the pass: a key
+// the file already carries is never rewritten from profiles.json, even when
+// the legacy extras hold different values, and a partially complete file
+// only has its genuinely missing keys filled in.
+func TestLoadSettingsKeepsExplicitKnobs(t *testing.T) {
+	home := freshHome(t)
+	dir := filepath.Join(home, ".config", "SwiftSSTP")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	legacyProfiles := `{"version":1,"profiles":[
+    {"id":"1","name":"a","host":"a","port":443,"username":"u","password":"p","tls_mode":"verify",
+     "extras":{"socks_port":20808,"http_port":20809,"system_proxy":true}}
+  ]}`
+	if err := os.WriteFile(filepath.Join(dir, "profiles.json"), []byte(legacyProfiles), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "settings.json")
+	partial := `{"version":1,"mtu":0,"ipv4_enabled":true,"ipv6_enabled":false,"dns_override":[],
+  "auto_reconnect":{"enabled":true,"initial_backoff_ms":1000,"max_backoff_ms":30000},
+  "proxy":{"type":"","host":"","port":0,"username":"","password":""},"tunnels":1,"socks_port":30808}`
+	if err := os.WriteFile(path, []byte(partial), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.SocksPort != 30808 {
+		t.Fatalf("explicit socks_port was overwritten: %+v", s)
+	}
+	if s.HTTPPort != 20809 || !s.SystemProxy {
+		t.Fatalf("missing keys were not filled in: %+v", s)
+	}
+
+	// A complete file is left alone entirely, whatever profiles.json says.
+	complete := `{"version":1,"mtu":0,"ipv4_enabled":true,"ipv6_enabled":false,"dns_override":[],
+  "auto_reconnect":{"enabled":true,"initial_backoff_ms":1000,"max_backoff_ms":30000},
+  "proxy":{"type":"","host":"","port":0,"username":"","password":""},"tunnels":1,
+  "socks_port":30808,"http_port":30809,"system_proxy":false}`
+	if err := os.WriteFile(path, []byte(complete), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err = LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.SocksPort != 30808 || s.HTTPPort != 30809 || s.SystemProxy {
+		t.Fatalf("complete settings.json was re-seeded from profiles.json: %+v", s)
 	}
 }
 

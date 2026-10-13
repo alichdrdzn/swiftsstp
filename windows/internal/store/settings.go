@@ -43,11 +43,22 @@ func LoadSettings() (engine.Settings, error) {
 	b, err := os.ReadFile(path)
 	mu.Unlock()
 	if err == nil {
-		var f settingsFile
-		if err := json.Unmarshal(b, &f); err != nil {
-			return engine.Settings{}, fmt.Errorf("settings.json: %w", err)
+		// An existing file can still predate the three local-proxy keys:
+		// settings.json shipped in an earlier release without them, and
+		// only a missing-file migration would ever fold them in. Left
+		// unfixed, the first connect after the upgrade would write the
+		// built-in defaults over the ports and the system proxy toggle
+		// the user had configured, which is a silent loss of settings.
+		s, changed, err := mergeLocalProxyKnobs(b)
+		if err != nil {
+			return engine.Settings{}, err
 		}
-		return f.Settings, nil
+		if changed {
+			if err := SaveSettings(s); err != nil {
+				return s, fmt.Errorf("settings.json: migrate: %w", err)
+			}
+		}
+		return s, nil
 	}
 	if !os.IsNotExist(err) {
 		return engine.Settings{}, err
@@ -72,6 +83,8 @@ func LoadSettings() (engine.Settings, error) {
 // or the defaults when none does. Only keys the file actually carries
 // are taken: a profiles.json that Save already converged on the
 // documented shape carries none of them and must not seed zero values.
+// The three local-proxy knobs count as moved fields as well; they just
+// live one level deeper, under each profile's extras.
 func seedFromProfiles() (engine.Settings, error) {
 	path, err := profilesPath()
 	if err != nil {
@@ -142,7 +155,152 @@ func seedFromProfile(entry map[string]json.RawMessage) (engine.Settings, bool) {
 		differs = differs || c.Tunnels != d.Tunnels
 		s.Tunnels = c.Tunnels
 	}
+	// The three local-proxy knobs (socks_port, http_port, system_proxy)
+	// used to live in each profile's extras map, so they are not top
+	// level keys: look inside extras and take each one only when the key
+	// is actually there, flagging a value that differs from the default
+	// exactly like the fields above. SettingsFrom already resolved the
+	// accessors against the defaults, so a profiles.json that carries
+	// none of them simply seeds the defaults.
+	if ex, ok := rawExtras(entry); ok {
+		if _, ok := ex["socks_port"]; ok {
+			differs = differs || c.SocksPort != d.SocksPort
+			s.SocksPort = c.SocksPort
+		}
+		if _, ok := ex["http_port"]; ok {
+			differs = differs || c.HTTPPort != d.HTTPPort
+			s.HTTPPort = c.HTTPPort
+		}
+		if _, ok := ex["system_proxy"]; ok {
+			differs = differs || c.SystemProxy != d.SystemProxy
+			s.SystemProxy = c.SystemProxy
+		}
+	}
 	return s, differs
+}
+
+// rawExtras decodes a profile entry's "extras" object into a generic map
+// so the migration can see which keys the legacy file actually carries.
+// A missing, null or non-object extras decodes as ok == false and the
+// caller keeps the defaults.
+func rawExtras(entry map[string]json.RawMessage) (map[string]json.RawMessage, bool) {
+	raw, ok := entry["extras"]
+	if !ok {
+		return nil, false
+	}
+	var ex map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &ex); err != nil || ex == nil {
+		return nil, false
+	}
+	return ex, true
+}
+
+// localProxyKeys are the three knobs that moved from each profile's extras
+// into settings.json after that file had already shipped, so a settings.json
+// written by the earlier release carries none of them.
+var localProxyKeys = []string{"socks_port", "http_port", "system_proxy"}
+
+// mergeLocalProxyKnobs parses a settings.json that already exists and folds
+// in whichever of the three local-proxy keys it is missing, taking each
+// value from the first profile (file order) whose extras carry it. Keys the
+// file does carry are left exactly as the user configured them, so this pass
+// is a one-way completion and never a re-seed. It reports whether anything
+// changed so the caller can persist the result once.
+func mergeLocalProxyKnobs(b []byte) (engine.Settings, bool, error) {
+	var f settingsFile
+	if err := json.Unmarshal(b, &f); err != nil {
+		return engine.Settings{}, false, fmt.Errorf("settings.json: %w", err)
+	}
+	// Key presence has to be read from the raw object: the embedded
+	// engine.Settings decodes an absent socks_port and an explicit 0 into
+	// the same zero value, and only the raw form tells them apart.
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return engine.Settings{}, false, fmt.Errorf("settings.json: %w", err)
+	}
+	missing := false
+	for _, k := range localProxyKeys {
+		if _, ok := keys[k]; !ok {
+			missing = true
+		}
+	}
+	if !missing {
+		return f.Settings, false, nil
+	}
+	seed, err := seedExtrasFromProfiles()
+	if err != nil {
+		return engine.Settings{}, false, err
+	}
+	s := f.Settings
+	if _, ok := keys["socks_port"]; !ok {
+		s.SocksPort = seed.SocksPort
+	}
+	if _, ok := keys["http_port"]; !ok {
+		s.HTTPPort = seed.HTTPPort
+	}
+	if _, ok := keys["system_proxy"]; !ok {
+		s.SystemProxy = seed.SystemProxy
+	}
+	return s, true, nil
+}
+
+// seedExtrasFromProfiles scans profiles.json the way seedFromProfiles does
+// and returns the values of the first profile (file order) that still
+// carries any of the three local-proxy knobs in extras, keeping the built-in
+// default for the keys that entry does not carry. Save prunes these keys out
+// of profiles.json, so a converged file simply yields the defaults, which is
+// the documented behaviour for installs that never had the legacy extras.
+func seedExtrasFromProfiles() (engine.Settings, error) {
+	path, err := profilesPath()
+	if err != nil {
+		return engine.Settings{}, err
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return engine.DefaultSettings(), nil
+		}
+		return engine.Settings{}, err
+	}
+	var doc struct {
+		Profiles []map[string]json.RawMessage `json:"profiles"`
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		return engine.Settings{}, fmt.Errorf("profiles.json: %w", err)
+	}
+	for _, entry := range doc.Profiles {
+		ex, ok := rawExtras(entry)
+		if !ok {
+			continue
+		}
+		s := engine.DefaultSettings()
+		carried := false
+		if raw, ok := ex["socks_port"]; ok {
+			var v int
+			if err := json.Unmarshal(raw, &v); err == nil {
+				s.SocksPort = v
+				carried = true
+			}
+		}
+		if raw, ok := ex["http_port"]; ok {
+			var v int
+			if err := json.Unmarshal(raw, &v); err == nil {
+				s.HTTPPort = v
+				carried = true
+			}
+		}
+		if raw, ok := ex["system_proxy"]; ok {
+			var v bool
+			if err := json.Unmarshal(raw, &v); err == nil {
+				s.SystemProxy = v
+				carried = true
+			}
+		}
+		if carried {
+			return s, nil
+		}
+	}
+	return engine.DefaultSettings(), nil
 }
 
 // SaveSettings writes settings.json atomically (tmp file + rename, the
