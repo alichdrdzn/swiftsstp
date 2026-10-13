@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -37,6 +38,14 @@ type App struct {
 	mu     sync.Mutex
 	logs   []string
 	update update.Info // last successful update_check result (for update_notes)
+
+	// Window state owned by the tray (tray.go). winHidden records that the
+	// window was parked on purpose, by the close button or by a left click on
+	// the tray icon, because Wails offers no "is it hidden" query to ask.
+	// exiting marks a deliberate quit from the tray menu so that
+	// App.onBeforeClose lets it through instead of hiding the window again.
+	winHidden atomic.Bool
+	exiting   atomic.Bool
 }
 
 // NewApp wires the engine, data planes and persistence together.
@@ -66,6 +75,10 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.logf("swiftsstp: ui ready")
+	// The tray icon has to outlive the window, so it starts once the context
+	// exists and then runs on its own goroutine: systray.Run blocks until the
+	// app exits, and the Wails message loop owns the main thread.
+	go a.startTray()
 }
 
 func (a *App) shutdown(context.Context) {

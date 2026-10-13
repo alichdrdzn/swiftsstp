@@ -41,6 +41,12 @@ func main() {
 		AssetServer:       &assetserver.Options{Assets: assets},
 		OnStartup:         app.startup,
 		OnShutdown:        app.shutdown,
+		// The title bar close button must never exit the app: it hides the
+		// window to the tray and the tunnel keeps running, so quitting moves
+		// to the tray menu's Exit item (v2rayN style). The hook refuses the
+		// close after hiding; see App.onBeforeClose for why the refusal has
+		// to be there.
+		OnBeforeClose:     app.onBeforeClose,
 		Bind:              []interface{}{app},
 		WindowStartState:  options.Normal,
 		// Windows platform specifics (Wails' WebView2 loader is pure Go,

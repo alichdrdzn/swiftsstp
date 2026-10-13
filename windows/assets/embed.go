@@ -10,3 +10,12 @@ import _ "embed"
 //
 //go:embed wintun.dll
 var WintunDLL []byte
+
+// TrayIcon is the multi-resolution .ico for the Windows notification area
+// (16, 24, 32, 48 and 256 px frames), generated from
+// docs/logo/swiftsstp-icon-512.png. The shell wants raw .ico bytes rather
+// than a path, because fyne.io/systray materialises them to a temp file and
+// hands that to LoadImage, so the icon has to travel inside the exe.
+//
+//go:embed tray.ico
+var TrayIcon []byte

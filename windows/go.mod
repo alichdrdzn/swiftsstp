@@ -3,6 +3,7 @@ module swiftsstp/windows
 go 1.27.2
 
 require (
+	fyne.io/systray v1.12.2
 	github.com/wailsapp/wails/v2 v2.16.0
 	golang.org/x/net v0.60.0
 	golang.org/x/sys v0.49.0
