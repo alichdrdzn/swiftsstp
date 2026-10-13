@@ -56,9 +56,7 @@ Binaries for each release are published on the
 | `sstpcli-<version>-linux-amd64` | Linux command-line client |
 
 Each release includes a `SHA256SUMS` file; verify downloaded assets
-against it. The Android package installs directly. If an earlier build
-was installed with a different signature, uninstall it before
-installing the release build.
+against it. The Android package installs directly.
 
 ## Building from source
 
@@ -83,32 +81,6 @@ ANDROID_HOME=/path/to/sdk gomobile bind -target=android -androidapi 26 \
 cd android && ./gradlew assembleDebug      # or assembleRelease
 ```
 
-Continuous integration (`.github/workflows/ci.yml`) runs the test suites
-and builds every target on each push. Pushing a version tag such as
-`v1.2.0` triggers the release workflow
-(`.github/workflows/release.yml`), which builds all binaries, signs the
-Android package, and publishes a GitHub Release.
-
-### Release signing
-
-Without configuration, release APKs are signed with a debug key: the
-package installs normally, but installing a later build with a different
-signature requires uninstalling first. For consistent signatures across
-releases, generate a keystore and add these repository secrets:
-
-```sh
-keytool -genkeypair -keystore swiftsstp.keystore -alias swiftsstp \
-  -keyalg RSA -keysize 4096 -validity 10950
-base64 -w0 swiftsstp.keystore    # value for SIGNING_KEYSTORE_BASE64
-```
-
-| Secret | Value |
-|--------|-------|
-| `SIGNING_KEYSTORE_BASE64` | output of `base64 -w0` on the keystore |
-| `SIGNING_KEYSTORE_PASSWORD` | keystore password |
-| `SIGNING_KEY_ALIAS` | key alias |
-| `SIGNING_KEY_PASSWORD` | key password |
-
 ## Layout
 
 | Path | What it is |
@@ -120,22 +92,12 @@ base64 -w0 swiftsstp.keystore    # value for SIGNING_KEYSTORE_BASE64
 | `windows/` | Wails desktop app (Wintun full-tunnel + gVisor netstack proxy mode, vanilla-JS frontend embedded via go:embed) |
 | `reconnect/` | Auto-reconnect manager with exponential backoff |
 | `usage/` | Persistent per-profile traffic counters |
-| `cmd/sstpcli/` | Reference CLI client (Linux TUN backend); the interop test bed |
+| `cmd/sstpcli/` | Reference CLI client (Linux TUN backend) |
 | `docs/` | Shared contracts (`PROFILE_SCHEMA.md`) and logo sources (`logo/`) |
-
-## Interop status
-
-Verified against a SoftEther VPN Server (MS-SSTP listener): MS-CHAPv2
-authentication, SHA-256 crypto binding, IPCP addressing and DNS
-negotiation, and live traffic through the tunnel (an HTTP request through
-the tunnel egresses via the server's public address).
 
 ## Contributing
 
-Bug reports, feature requests, and pull requests are welcome. Before
-submitting a pull request, run `go test ./...`, the `windows/` module
-tests, and both application builds; continuous integration repeats these
-checks.
+Bug reports, feature requests and pull requests are welcome.
 
 ## License
 
